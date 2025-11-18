@@ -16,7 +16,7 @@ npm install
 
 Tạo một file có tên **`.env`** ở thư mục gốc của dự án, ngang hàng với file `package.json`. File này chứa các biến môi trường cần thiết để server hoạt động.
 
-> **⚠️ Lưu ý:** Không được chia sẻ file `.env` chứa các khóa bí mật (Secret Keys) lên mã nguồn công khai (ví dụ: GitHub).
+> **Lưu ý:** Không được chia sẻ file `.env` chứa các khóa bí mật (Secret Keys) lên mã nguồn công khai (ví dụ: GitHub).
 
 **Nội dung mẫu cho file `.env`:**
 
@@ -89,5 +89,59 @@ Dự án tuân theo một kiến trúc module hóa giúp tách biệt trách nhi
   * **Nhập (Import) các thư viện bên thứ 3** ở đầu file, sau đó đến các module nội bộ của dự án.
   * **Sử dụng dấu ngoặc nhọn `{ }`** để nhập các export không phải là `default` (Ví dụ: `const { verifyToken } = require(...)`).
 
+### 3\. Imports và Exports
+
+  * **Sử dụng `const`** cho các `require` và định nghĩa hàm (trừ khi cần thay đổi).
+  * **Nhập (Import) các thư viện bên thứ 3** ở đầu file, sau đó đến các module nội bộ của dự án.
+  * **Sử dụng dấu ngoặc nhọn `{ }`** để nhập các export không phải là `default` (Ví dụ: `const { verifyToken } = require(...)`).
 ---
 > **Lưu ý: Nên đọc kiến thức về JavaScript căn bản để hiểu được syntax cơ bản, đọc kiến thức về backend để hiểu về cấu trúc của thư mục.(Ví dụ đọc hàm bất đồng bộ để hiểu về dự án hơn)**
+
+-----
+
+## IV. Quy tắc Git và Quy trình làm việc
+
+Để duy trì lịch sử code sạch và tránh xung đột, nhóm cần tuân thủ quy trình Git sau:
+
+### 1\. Cấu trúc Branch
+
+  * **`main` / `master`**: Branch ổn định, chỉ chứa code đã được kiểm thử và sẵn sàng triển khai (Deployment). **Không được `push` trực tiếp lên branch này.**
+  * **`develop`**: Branch tích hợp chính. Tất cả các branch tính năng (feature branches) phải được hợp nhất (merge) vào đây.
+  * **Feature Branches**: Tạo branch mới cho **mỗi nhiệm vụ/tính năng** riêng biệt từ `develop`.
+      * **Quy ước đặt tên**: `feature/<tên-tính-năng>` hoặc `fix/<tên-bug>`.
+      * **Ví dụ**: `git checkout -b feature/auth-register`
+
+### 2\. Quy trình làm việc cơ bản
+
+1.  **Cập nhật:** Luôn **`pull`** code mới nhất từ branch **`develop`** trước khi bắt đầu công việc.
+    ```bash
+    git checkout develop
+    git pull origin develop
+    ```
+2.  **Tạo Branch:** Tạo branch làm việc từ `develop`.
+    ```bash
+    git checkout -b feature/<tên-tính-năng>
+    ```
+3.  **Commit:** Commit code thường xuyên với thông điệp rõ ràng, tuân thủ quy tắc sau:
+      * **Quy tắc Commit Message**: Bắt đầu bằng loại commit và theo sau là mô tả ngắn gọn.
+          * `feat`: Thêm tính năng mới. (vd: `feat: add register api logic`)
+          * `fix`: Sửa lỗi. (vd: `fix: correct token expiration time`)
+          * `refactor`: Tái cấu trúc code mà không thay đổi hành vi.
+          * `style`: Thay đổi định dạng/style (không liên quan đến code logic).
+4.  **Hoàn thành Tính năng (Push & Pull Request - PR):**
+      * Khi hoàn thành, `push` branch của bạn lên remote.
+        ```bash
+        git push origin feature/<tên-tính-năng>
+        ```
+      * Tạo **Pull Request (PR)** từ branch của bạn sang branch **`develop`**.
+      * Gán người duyệt (Reviewer) và chờ **Duyệt Code (Code Review)**.
+
+### 3\. Giải quyết Xung đột (Conflict)
+
+  * Nếu có xung đột, hãy **`pull`** code mới nhất từ **`develop`** vào branch tính năng của bạn, giải quyết xung đột trên máy cục bộ, và sau đó **`push`** lại. **Không bao giờ merge lên `develop` mà chưa giải quyết xung đột.**
+
+---
+> **Lưu ý**: Phải kiểm tra trước khi push tránh conflict, nếu có conflict phải tự xử lý, không ảnh hưởng đến main.
+* Không code quá nhiều chức năng để khi push lên không biết phải commit gì.
+* Khi bị lỗi kiểu thiếu 1 tí gì đó thêm vào cho đủ nhưng lỡ push rồi, commit cứ dùng fix: ...
+

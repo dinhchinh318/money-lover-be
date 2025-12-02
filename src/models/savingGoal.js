@@ -1,54 +1,58 @@
-const mongoose = require('mongoose');
-const mongoose_delete = require('mongoose-delete');
+const mongoose = require("mongoose");
+const mongooseDelete = require("mongoose-delete");
 
 const savingGoalSchema = new mongoose.Schema(
   {
-    userId: {
+    user: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true
     },
-
-    walletId: {
+    wallet: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Wallet",
-      required: true
+      required: true,
+      validate: {
+        validator: async function (walletId) {
+          const wallet = await mongoose.model("Wallet").findById(walletId);
+          return wallet && wallet.user.toString() === this.user.toString();
+        },
+        message: "Wallet không thuộc user"
+      }
     },
-
     name: {
       type: String,
       required: true,
       trim: true
     },
-
     target_amount: {
       type: Number,
       required: true,
       min: 0
     },
-
-    // cache giá trị hiện tại — cập nhật khi có transaction liên quan
     current_amount: {
       type: Number,
       default: 0,
-      min: 0
+      min: 0,
+      validate: {
+        validator: function (val) {
+          return val <= this.target_amount;
+        },
+        message: "current_amount cannot exceed target_amount"
+      }
     },
-
-    currency: {
-      type: String,
-      default: "VND"
-    },
-
     target_date: {
       type: Date,
-      default: null
+      default: null,
+      validate: {
+        validator: (val) => !val || val > new Date(),
+        message: "target_date must be in the future"
+      }
     },
-
     is_active: {
       type: Boolean,
       default: true
     },
-
     description: {
       type: String,
       default: ""
@@ -57,10 +61,9 @@ const savingGoalSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Index phổ biến
-savingGoalSchema.index({ userId: 1, walletId: 1, is_active: 1 });
+savingGoalSchema.index({ user: 1, wallet: 1, is_active: 1 });
 
-savingGoalSchema.plugin(mongoose_delete, {
+savingGoalSchema.plugin(mongooseDelete, {
   deletedAt: true,
   overrideMethods: "all"
 });

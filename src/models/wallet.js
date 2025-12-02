@@ -26,6 +26,10 @@ const walletSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    // Optional info for bank
+    bankName: String,
+    bankAccount: String,
+    bankCode: String,
     is_archived: {
       type: Boolean,
       default: false,
@@ -33,6 +37,9 @@ const walletSchema = new mongoose.Schema(
   },
   {timestamps: true}
 );
+
+// Không cho trùng tên ví trong cùng 1 user
+walletSchema.index({ user: 1, name: 1 }, { unique: true });
 
 // Soft delete
 walletSchema.plugin(mongoose_delete, {

@@ -1,5 +1,5 @@
 const mongoose = require('mongoose');
-const mongoose = require('mongoose-delete');
+const mongoose_delete = require('mongoose-delete');
 
 const categorySchema = new mongoose.Schema(
   {
@@ -35,7 +35,23 @@ const categorySchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-CategorySchema.plugin(mongoose_delete, {
+// Chống tạo vòng lặp parent
+categorySchema.pre("save", async function (next) {
+  if (!this.parent_id) return next();
+
+  let parent = await mongoose.model("Category").findById(this.parent_id);
+  while (parent) {
+    if (parent._id.equals(this._id)) {
+      return next(new Error("Không thể tạo vòng lặp category"));
+    }
+    parent = parent.parent_id
+      ? await mongoose.model("Category").findById(parent.parent_id)
+      : null;
+  }
+  next();
+});
+
+categorySchema.plugin(mongoose_delete, {
   deletedAt: true,
   overrideMethods: "all"
 });

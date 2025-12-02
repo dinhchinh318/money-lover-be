@@ -68,7 +68,7 @@ userSchema.pre("save", async function (next) {
 
 // Add check-password method
 userSchema.methods.isPasswordMatch = async function (enteredPassword) {
-    return await bcrypt.compare(endterdPassword, this.password);
+    return await bcrypt.compare(enteredPassword, this.password);
 };
 
 // Add plugin mongoose-delete

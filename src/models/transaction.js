@@ -1,46 +1,90 @@
-const mongoose = require('mongoose');
-const mongoose_delete = require('mongoose-delete')
+const mongoose = require("mongoose");
+const mongoose_delete = require("mongoose-delete");
 
-const TransactionSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
-
-  // Ví nguồn (bắt buộc với tất cả loại trừ trường hợp special)
-  walletId: { type: mongoose.Schema.Types.ObjectId, ref: "Wallet", required: true },
-
-  // Category (có thể null cho transfer/adjust)
-  categoryId: { type: mongoose.Schema.Types.ObjectId, ref: "Category", required: false },
-
-  // Số tiền (luôn dương)
-  amount: { type: Number, required: true, min: 0 },
-
-  // Loại transaction giống Money Lover
-  type: {
-    type: String,
-    enum: ["income", "expense", "debt", "loan", "transfer", "adjust"],
-    required: true
+const transactionSchema = new mongoose.Schema(
+  {
+    userId: { 
+      type: mongoose.Schema.Types.ObjectId, ref: "User", required: true 
+    },
+    walletId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Wallet",
+      required: true
+    },
+    categoryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Category",
+      required: function () {
+        return this.type === "income" || this.type === "expense";
+      },
+    },
+    amount: { 
+      type: Number, required: true, min: 1 
+    },
+    type: {
+      type: String,
+      enum: ["income", "expense", "debt", "loan", "transfer", "adjust"],
+      required: true,
+    },
+    toWalletId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Wallet",
+      validate: {
+        validator: function (v) {
+          if (this.type !== "transfer") return true;
+          return v != null;
+        },
+        message: "Transfer phải có ví đích",
+      },
+    },
+    counterpartyName: String,
+    counterpartyContact: String,
+    dueDate: Date,
+    isSettled: {
+      type: Boolean, default: false 
+    },
+    adjustReason: {
+      type: String,
+      validate: {
+        validator: function (v) {
+          if (this.type !== "adjust") return true;
+          return v != null && v.length > 0;
+        },
+        message: "Adjust cần lý do",
+      },
+    },
+    date: { 
+      type: Date, default: Date.now 
+    },
+    note: { 
+      type: String, default: "" 
+    },
+    imageUrl: { 
+      type: String, default: "" 
+    },
+    isRecurring: { 
+      type: Boolean, default: false 
+    },
+    recurringType: {
+      type: String,
+      enum: ["daily", "weekly", "monthly", "yearly"],
+      default: null,
+    },
   },
+  { timestamps: true }
+);
 
-  // Dùng cho transfer: ví đích
-  toWalletId: { type: mongoose.Schema.Types.ObjectId, ref: "Wallet" },
+// Không cho ví chuyển sang chính nó
+transactionSchema.pre("save", function (next) {
+  if (this.type === "transfer" && this.walletId.equals(this.toWalletId)) {
+    return next(new Error("Không thể chuyển trong cùng 1 ví"));
+  }
+  next();
+});
 
-  // Dùng cho debt/loan: thông tin người cho/mượn
-  counterpartyName: { type: String },    // tên người vay/cho vay
-  counterpartyContact: { type: String }, // số điện thoại/email nếu có
-  dueDate: { type: Date },               // hạn trả nợ (nếu có)
-  isSettled: { type: Boolean, default: false }, // đã thu/đã trả?
+transactionSchema.plugin(mongoose_delete, { 
+  deletedAt: true,
+  overrideMethods: "all" 
+});
 
-  // adjust: mô tả nguyên nhân điều chỉnh
-  adjustReason: { type: String },
-
-  date: { type: Date, default: Date.now },
-  note: { type: String, default: "" },
-  imageUrl: { type: String, default: "" },
-
-  // recurring
-  isRecurring: { type: Boolean, default: false },
-  recurringType: { type: String, enum: ["daily","weekly","monthly","yearly", null], default: null }
-}, { timestamps: true });
-
-TransactionSchema.plugin(mongoose_delete, { overrideMethods: "all"});
-
-module.exports = mongoose.model('Transaction', TransactionSchema);
+module.exports = mongoose.model("Transaction", transactionSchema);

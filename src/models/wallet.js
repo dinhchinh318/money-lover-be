@@ -30,6 +30,10 @@ const walletSchema = new mongoose.Schema(
     bankName: String,
     bankAccount: String,
     bankCode: String,
+    is_default: {
+      type: Boolean,
+      default: false,
+    },
     is_archived: {
       type: Boolean,
       default: false,

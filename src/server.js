@@ -14,7 +14,7 @@ app.use(
     //   "https://bingcloth-be.onrender.com",
     //   "https://bingcloth.vercel.app",
     ],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization", "delay"],
     credentials: true,
   })

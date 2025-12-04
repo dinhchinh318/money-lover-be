@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 const mongooseDelete = require('mongoose-delete');
 
 const budgetSchema = new mongoose.Schema({
-  user: {
+  userId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "User",
     required: true

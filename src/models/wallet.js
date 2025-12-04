@@ -3,7 +3,7 @@ const mongoose_delete = require('mongoose-delete');
 
 const walletSchema = new mongoose.Schema(
   {
-    user: {
+    userId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
@@ -30,6 +30,10 @@ const walletSchema = new mongoose.Schema(
     bankName: String,
     bankAccount: String,
     bankCode: String,
+    is_default: {
+      type: Boolean,
+      default: false,
+    },
     is_archived: {
       type: Boolean,
       default: false,

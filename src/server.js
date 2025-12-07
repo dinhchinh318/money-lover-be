@@ -3,6 +3,7 @@ const express = require("express");
 const connection = require("./configs/DB");
 const initRoute = require("./routes/index");
 const cors = require("cors");
+const aiRoutes = require("./routes/ai.routes");
 
 const port = process.env.PORT || 8080;
 const app = express();
@@ -22,6 +23,7 @@ app.use(
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use('/api/ai', aiRoutes);
 
 initRoute(app);
 

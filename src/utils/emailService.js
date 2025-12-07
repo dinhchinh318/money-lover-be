@@ -4,7 +4,7 @@ const transporter = nodemailer.createTransport({
   service: "gmail",
   auth: {
     user: process.env.EMAIL_USERNAME,
-    pass: process.env.EMAIL_PASSWORD,
+    pass: process.env.EMAIL_APP_PASSWORD,
   },
 });
 
@@ -25,22 +25,22 @@ const getResetPasswordTemplate = (userName, otp) => {
 
 const getWelcomeTemplate = (userName) => {
   return {
-    subject: "Welcome to BingCloth – Fashion with Personality",
+    subject: "Welcome to MoneyLover – Manage Your Finances Smartly",
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #2c3e50; text-align: center;">Welcome to BingCloth! 👗🧥</h1>
+        <h1 style="color: #2c3e50; text-align: center;">Welcome to MoneyLover! 💰📊</h1>
         <p style="font-size: 16px;">Hello <strong>${userName}</strong>,</p>
-        <p style="font-size: 16px;">We’re excited to welcome you to the BingCloth fashion community! Your account has been successfully created.</p>
+        <p style="font-size: 16px;">We’re excited to have you on board! Your MoneyLover account has been successfully created.</p>
         <div style="background-color: #f8f9fa; padding: 20px; border-radius: 5px; margin: 20px 0;">
-          <h2 style="color: #2c3e50; margin-top: 0;">With BingCloth, you can:</h2>
+          <h2 style="color: #2c3e50; margin-top: 0;">With MoneyLover, you can:</h2>
           <ul style="list-style-type: none; padding: 0;">
-            <li style="margin: 10px 0;">🛍️ Explore the latest fashion collections</li>
-            <li style="margin: 10px 0;">🎁 Enjoy exclusive offers for members</li>
-            <li style="margin: 10px 0;">📦 Experience fast and convenient delivery service</li>
+            <li style="margin: 10px 0;">💵 Track your expenses and income easily</li>
+            <li style="margin: 10px 0;">📊 Get insights on your spending habits</li>
+            <li style="margin: 10px 0;">🎯 Set budgets and achieve financial goals</li>
           </ul>
         </div>
         <p style="font-size: 16px;">If you have any questions, feel free to contact our support team anytime.</p>
-        <p style="font-size: 16px;">Best regards,<br>The BingCloth Team</p>
+        <p style="font-size: 16px;">Best regards,<br>The MoneyLover Team</p>
       </div>
     `,
   };

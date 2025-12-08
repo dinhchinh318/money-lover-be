@@ -4,7 +4,6 @@ const connection = require("./configs/DB");
 const initRoute = require("./routes/index");
 const cors = require("cors");
 const aiRoutes = require("./routes/ai.routes");
-
 const port = process.env.PORT || 8080;
 const app = express();
 

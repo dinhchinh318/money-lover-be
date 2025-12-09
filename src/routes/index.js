@@ -4,7 +4,7 @@ const categoryRoute = require("../routes/category.routes");
 const transactionRoute = require("../routes/transaction.routes");
 const reportRoute = require("../routes/report.routes");
 const analyticsRoute = require("../routes/analytics.routes");
-
+const budgetRoute = require("../routes/budget.routes");
 const initRoute = (app) => {
     app.use("/v1/api/auth", authRoute);
     app.use("/wallet", walletRoute);
@@ -12,6 +12,7 @@ const initRoute = (app) => {
     app.use("/transaction", transactionRoute);
     app.use("/report", reportRoute);
     app.use("/analytics", analyticsRoute);
+    app.use("/budgets", budgetRoute);
 }
 
 module.exports = initRoute;

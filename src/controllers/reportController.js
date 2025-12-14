@@ -140,6 +140,13 @@ const getTimeBasedReportAPI = async (req, res) => {
       categoryId: req.query.categoryId,
     };
 
+    console.log("📥 [getTimeBasedReportAPI] Request received:", {
+      userId,
+      period,
+      options,
+      query: req.query,
+    });
+
     let result;
     switch (period) {
       case "day":
@@ -169,10 +176,11 @@ const getTimeBasedReportAPI = async (req, res) => {
 
     return res.status(200).json(result);
   } catch (error) {
+    console.error("❌ [getTimeBasedReportAPI] Error:", error);
     return res.status(500).json({
       status: false,
       error: -1,
-      message: error.message,
+      message: error.message || "Lỗi server khi lấy báo cáo theo thời gian",
       data: null,
     });
   }

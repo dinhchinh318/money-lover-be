@@ -7,11 +7,11 @@ const analyticsRoute = require("../routes/analytics.routes");
 
 const initRoute = (app) => {
     app.use("/v1/api/auth", authRoute);
-    app.use("/wallet", walletRoute);
-    app.use("/category", categoryRoute);
-    app.use("/transaction", transactionRoute);
-    app.use("/report", reportRoute);
-    app.use("/analytics", analyticsRoute);
+    app.use("/v1/api/wallet", walletRoute);
+    app.use("/v1/api/category", categoryRoute);
+    app.use("/v1/api/transaction", transactionRoute);
+    app.use("/v1/api/report", reportRoute);
+    app.use("/v1/api/analytics", analyticsRoute);
 }
 
 module.exports = initRoute;

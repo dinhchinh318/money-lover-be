@@ -19,12 +19,87 @@ const calculateStdDev = (values, mean) => {
  * Helper: Tính trung bình
  */
 const calculateMean = (values) => {
-  if (values.length === 0) return 0;
+  if (!values || values.length === 0) return 0;
   return values.reduce((sum, val) => sum + val, 0) / values.length;
 };
 
 /**
- * Helper: Tính độ tăng trưởng phần trăm
+ * Helper: Linear Regression - Tính hệ số a và b cho y = ax + b
+ * @param {Array} x - Mảng giá trị x (thời gian: 0, 1, 2, ...)
+ * @param {Array} y - Mảng giá trị y (chi tiêu)
+ * @returns {Object} { slope, intercept, r2 } - Hệ số góc, hệ số chặn, R-squared
+ */
+const linearRegression = (x, y) => {
+  if (x.length !== y.length || x.length < 2) {
+    return { slope: 0, intercept: 0, r2: 0 };
+  }
+
+  const n = x.length;
+  const sumX = x.reduce((sum, val) => sum + val, 0);
+  const sumY = y.reduce((sum, val) => sum + val, 0);
+  const sumXY = x.reduce((sum, val, idx) => sum + val * y[idx], 0);
+  const sumXX = x.reduce((sum, val) => sum + val * val, 0);
+  const sumYY = y.reduce((sum, val) => sum + val * val, 0);
+
+  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+
+  // Tính R-squared (độ phù hợp)
+  const yMean = sumY / n;
+  const ssRes = y.reduce((sum, val, idx) => {
+    const predicted = slope * x[idx] + intercept;
+    return sum + Math.pow(val - predicted, 2);
+  }, 0);
+  const ssTot = y.reduce((sum, val) => sum + Math.pow(val - yMean, 2), 0);
+  const r2 = ssTot > 0 ? 1 - (ssRes / ssTot) : 0;
+
+  return { slope, intercept, r2 };
+};
+
+/**
+ * Helper: Exponential Smoothing - Dự đoán giá trị tiếp theo
+ * @param {Array} values - Mảng giá trị lịch sử
+ * @param {Number} alpha - Hệ số smoothing (0-1), mặc định 0.3
+ * @returns {Number} - Giá trị dự đoán
+ */
+const exponentialSmoothing = (values, alpha = 0.3) => {
+  if (values.length === 0) return 0;
+  if (values.length === 1) return values[0];
+
+  let smoothed = values[0];
+  for (let i = 1; i < values.length; i++) {
+    smoothed = alpha * values[i] + (1 - alpha) * smoothed;
+  }
+  return smoothed;
+};
+
+/**
+ * Helper: Tính Z-score để phát hiện outlier
+ * @param {Number} value - Giá trị cần kiểm tra
+ * @param {Number} mean - Giá trị trung bình
+ * @param {Number} stdDev - Độ lệch chuẩn
+ * @returns {Number} - Z-score
+ */
+const calculateZScore = (value, mean, stdDev) => {
+  if (stdDev === 0) return 0;
+  return (value - mean) / stdDev;
+};
+
+/**
+ * Helper: Tính percentile
+ * @param {Array} values - Mảng giá trị đã sắp xếp
+ * @param {Number} percentile - Percentile cần tính (0-100)
+ * @returns {Number} - Giá trị tại percentile
+ */
+const calculatePercentile = (values, percentile) => {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const index = Math.ceil((percentile / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, index)];
+};
+
+/**
+ * Helper: Tính phần trăm tăng trưởng
  */
 const calculateGrowthPercent = (current, previous) => {
   if (previous === 0) return current > 0 ? 100 : 0;
@@ -765,6 +840,7 @@ const getTransactionFrequency = async (userId, options = {}) => {
 
 /**
  * B.1.1 - Dự đoán chi tiêu cuối tháng (dựa trên trung bình 7 ngày gần nhất)
+ * Sử dụng thuật toán: Exponential Weighted Moving Average (EWMA) với alpha = 0.3
  */
 const predictMonthEndExpense7Days = async (userId) => {
   try {
@@ -773,8 +849,8 @@ const predictMonthEndExpense7Days = async (userId) => {
     const last7Days = new Date(now);
     last7Days.setDate(now.getDate() - 7);
 
-    // Chi tiêu 7 ngày gần nhất
-    const last7DaysStats = await Transaction.aggregate([
+    // Lấy chi tiêu theo ngày trong 7 ngày gần nhất để phân tích chi tiết
+    const dailyStats = await Transaction.aggregate([
       {
         $match: {
           userId,
@@ -784,11 +860,15 @@ const predictMonthEndExpense7Days = async (userId) => {
       },
       {
         $group: {
-          _id: null,
+          _id: {
+            year: { $year: "$date" },
+            month: { $month: "$date" },
+            day: { $dayOfMonth: "$date" },
+          },
           totalAmount: { $sum: "$amount" },
-          count: { $sum: 1 },
         },
       },
+      { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
     ]);
 
     // Chi tiêu từ đầu tháng đến hiện tại
@@ -808,8 +888,7 @@ const predictMonthEndExpense7Days = async (userId) => {
       },
     ]);
 
-    const last7DaysTotal = last7DaysStats[0]?.totalAmount || 0;
-    const avgDailyLast7Days = last7DaysTotal / 7;
+    const last7DaysTotal = dailyStats.reduce((sum, day) => sum + day.totalAmount, 0);
     const currentMonthTotal = currentMonthStats[0]?.totalAmount || 0;
 
     // Số ngày đã qua trong tháng
@@ -817,8 +896,32 @@ const predictMonthEndExpense7Days = async (userId) => {
     // Số ngày còn lại trong tháng
     const daysRemaining = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - daysPassed;
 
-    // Dự đoán chi tiêu còn lại
-    const predictedRemaining = avgDailyLast7Days * daysRemaining;
+    // Thuật toán dự đoán: Exponential Weighted Moving Average
+    let avgDailyLast7Days = 0;
+    if (dailyStats.length > 0) {
+      const dailyAmounts = dailyStats.map((d) => d.totalAmount);
+      
+      // Nếu có đủ 7 ngày, dùng EWMA
+      if (dailyAmounts.length >= 3) {
+        avgDailyLast7Days = exponentialSmoothing(dailyAmounts, 0.3);
+      } else {
+        // Nếu ít dữ liệu, dùng trung bình đơn giản
+        avgDailyLast7Days = calculateMean(dailyAmounts);
+      }
+    } else if (last7DaysTotal > 0) {
+      // Fallback: chia đều cho 7 ngày
+      avgDailyLast7Days = last7DaysTotal / 7;
+    } else if (currentMonthTotal > 0 && daysPassed > 0) {
+      // Nếu không có dữ liệu 7 ngày, dùng trung bình tháng hiện tại
+      avgDailyLast7Days = currentMonthTotal / daysPassed;
+    }
+
+    // Dự đoán chi tiêu còn lại với điều chỉnh theo ngày trong tuần
+    // Giả sử cuối tuần chi tiêu nhiều hơn (weight adjustment)
+    const dayOfWeek = now.getDay(); // 0 = Chủ nhật, 6 = Thứ bảy
+    const weekendMultiplier = (dayOfWeek === 0 || dayOfWeek === 6) ? 1.15 : 1.0;
+    
+    const predictedRemaining = avgDailyLast7Days * daysRemaining * weekendMultiplier;
     const predictedMonthEnd = currentMonthTotal + predictedRemaining;
 
     return {
@@ -859,6 +962,7 @@ const predictMonthEndExpense7Days = async (userId) => {
 
 /**
  * B.1.2 - Dự đoán chi tiêu cuối tháng (dựa trên trung bình 30 ngày gần nhất)
+ * Sử dụng thuật toán: Weighted Average với trọng số giảm dần theo thời gian
  */
 const predictMonthEndExpense30Days = async (userId) => {
   try {
@@ -867,8 +971,8 @@ const predictMonthEndExpense30Days = async (userId) => {
     const last30Days = new Date(now);
     last30Days.setDate(now.getDate() - 30);
 
-    // Chi tiêu 30 ngày gần nhất
-    const last30DaysStats = await Transaction.aggregate([
+    // Lấy chi tiêu theo ngày trong 30 ngày gần nhất
+    const dailyStats = await Transaction.aggregate([
       {
         $match: {
           userId,
@@ -878,10 +982,15 @@ const predictMonthEndExpense30Days = async (userId) => {
       },
       {
         $group: {
-          _id: null,
+          _id: {
+            year: { $year: "$date" },
+            month: { $month: "$date" },
+            day: { $dayOfMonth: "$date" },
+          },
           totalAmount: { $sum: "$amount" },
         },
       },
+      { $sort: { "_id.year": 1, "_id.month": 1, "_id.day": 1 } },
     ]);
 
     // Chi tiêu từ đầu tháng đến hiện tại
@@ -901,12 +1010,38 @@ const predictMonthEndExpense30Days = async (userId) => {
       },
     ]);
 
-    const last30DaysTotal = last30DaysStats[0]?.totalAmount || 0;
-    const avgDailyLast30Days = last30DaysTotal / 30;
+    const last30DaysTotal = dailyStats.reduce((sum, day) => sum + day.totalAmount, 0);
     const currentMonthTotal = currentMonthStats[0]?.totalAmount || 0;
 
     const daysPassed = Math.floor((now - currentMonthStart) / (1000 * 60 * 60 * 24)) + 1;
     const daysRemaining = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - daysPassed;
+
+    // Thuật toán: Weighted Average với trọng số giảm dần (ngày gần nhất có trọng số cao hơn)
+    let avgDailyLast30Days = 0;
+    if (dailyStats.length > 0) {
+      const dailyAmounts = dailyStats.map((d) => d.totalAmount);
+      
+      if (dailyAmounts.length >= 7) {
+        // Weighted average: ngày gần nhất có trọng số cao hơn
+        const weights = dailyAmounts.map((_, idx) => {
+          // Trọng số tăng dần: ngày gần nhất = weight cao nhất
+          return (idx + 1) / dailyAmounts.length;
+        });
+        
+        const weightedSum = dailyAmounts.reduce((sum, val, idx) => sum + val * weights[idx], 0);
+        const weightSum = weights.reduce((sum, w) => sum + w, 0);
+        avgDailyLast30Days = weightedSum / weightSum;
+      } else if (dailyAmounts.length > 0) {
+        // Ít dữ liệu, dùng trung bình đơn giản
+        avgDailyLast30Days = calculateMean(dailyAmounts);
+      }
+    } else if (last30DaysTotal > 0) {
+      // Fallback: chia đều cho 30 ngày
+      avgDailyLast30Days = last30DaysTotal / 30;
+    } else if (currentMonthTotal > 0 && daysPassed > 0) {
+      // Nếu không có dữ liệu 30 ngày, dùng trung bình tháng hiện tại
+      avgDailyLast30Days = currentMonthTotal / daysPassed;
+    }
 
     const predictedRemaining = avgDailyLast30Days * daysRemaining;
     const predictedMonthEnd = currentMonthTotal + predictedRemaining;
@@ -978,15 +1113,30 @@ const predictMonthEndExpenseTrend = async (userId) => {
       { $sort: { "_id.year": 1, "_id.week": 1 } },
     ]);
 
-    // Tính xu hướng (linear regression đơn giản)
-    let trend = 0; // 0 = ổn định, >0 = tăng, <0 = giảm
+    // Tính xu hướng bằng Linear Regression
+    let trend = 0;
+    let dailyTrend = 0;
+    let trendDirection = "stable";
+    let r2 = 0;
+    
     if (weeklyStats.length >= 2) {
       const amounts = weeklyStats.map((s) => s.totalAmount);
-      const firstHalf = amounts.slice(0, Math.floor(amounts.length / 2));
-      const secondHalf = amounts.slice(Math.floor(amounts.length / 2));
-      const firstHalfAvg = calculateMean(firstHalf);
-      const secondHalfAvg = calculateMean(secondHalf);
-      trend = secondHalfAvg - firstHalfAvg;
+      const x = amounts.map((_, idx) => idx); // [0, 1, 2, ...]
+      
+      // Linear Regression: y = ax + b
+      const regression = linearRegression(x, amounts);
+      trend = regression.slope; // Xu hướng theo tuần
+      dailyTrend = trend / 7; // Chuyển sang ngày
+      r2 = regression.r2;
+      
+      // Xác định hướng xu hướng
+      if (trend > 0 && r2 > 0.3) {
+        trendDirection = "increasing";
+      } else if (trend < 0 && r2 > 0.3) {
+        trendDirection = "decreasing";
+      } else {
+        trendDirection = "stable";
+      }
     }
 
     // Chi tiêu từ đầu tháng đến hiện tại
@@ -1010,11 +1160,22 @@ const predictMonthEndExpenseTrend = async (userId) => {
     const daysPassed = Math.floor((now - currentMonthStart) / (1000 * 60 * 60 * 24)) + 1;
     const daysRemaining = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate() - daysPassed;
 
-    // Dự đoán dựa trên xu hướng
-    const avgDailyCurrent = currentMonthTotal / daysPassed;
-    const trendPerDay = trend / 7; // Chuyển từ tuần sang ngày
-    const predictedDailyForRemaining = avgDailyCurrent + trendPerDay;
-    const predictedRemaining = predictedDailyForRemaining * daysRemaining;
+    // Dự đoán dựa trên xu hướng với Linear Regression
+    const avgDailyCurrent = daysPassed > 0 ? currentMonthTotal / daysPassed : 0;
+    
+    // Sử dụng Linear Regression để dự đoán chính xác hơn
+    let predictedDailyForRemaining = avgDailyCurrent;
+    if (weeklyStats.length >= 2 && r2 > 0.2) {
+      // Dự đoán dựa trên xu hướng nếu có độ tin cậy
+      predictedDailyForRemaining = avgDailyCurrent + dailyTrend;
+    } else {
+      // Nếu không có xu hướng rõ ràng, dùng Exponential Smoothing
+      const recentWeeklyAmounts = weeklyStats.slice(-4).map((s) => s.totalAmount);
+      const smoothedWeekly = exponentialSmoothing(recentWeeklyAmounts, 0.3);
+      predictedDailyForRemaining = smoothedWeekly / 7;
+    }
+    
+    const predictedRemaining = Math.max(0, predictedDailyForRemaining * daysRemaining);
     const predictedMonthEnd = currentMonthTotal + predictedRemaining;
 
     return {
@@ -1030,8 +1191,9 @@ const predictMonthEndExpenseTrend = async (userId) => {
         },
         trend: {
           weeklyTrend: trend,
-          dailyTrend: trendPerDay,
-          direction: trend > 0 ? "increasing" : trend < 0 ? "decreasing" : "stable",
+          dailyTrend: dailyTrend,
+          direction: trendDirection,
+          confidence: r2, // Độ tin cậy của xu hướng (0-1)
         },
         prediction: {
           daysRemaining,
@@ -1228,27 +1390,30 @@ const predictCategorySpending = async (userId, options = {}) => {
       const amounts = cat.weeklyAmounts;
       let predictedNextWeek = 0;
 
+      // Sử dụng kết hợp Linear Regression và Exponential Smoothing
+      let trend = 0;
+      let confidence = 0;
+      
       if (amounts.length >= 2) {
-        // Moving average với trọng số (tuần gần nhất có trọng số cao hơn)
-        const weights = [];
-        for (let i = 0; i < amounts.length; i++) {
-          weights.push((i + 1) / amounts.length);
+        // Linear Regression để tính xu hướng
+        const x = amounts.map((_, idx) => idx);
+        const regression = linearRegression(x, amounts);
+        trend = regression.slope;
+        confidence = regression.r2;
+        
+        // Dự đoán bằng Linear Regression nếu có độ tin cậy cao
+        if (confidence > 0.4) {
+          const nextX = amounts.length;
+          predictedNextWeek = regression.slope * nextX + regression.intercept;
+        } else {
+          // Dùng Exponential Smoothing nếu xu hướng không rõ ràng
+          predictedNextWeek = exponentialSmoothing(amounts, 0.3);
         }
-        const weightedSum = amounts.reduce((sum, val, idx) => sum + val * weights[idx], 0);
-        const weightSum = weights.reduce((sum, w) => sum + w, 0);
-        predictedNextWeek = weightedSum / weightSum;
+        
+        // Đảm bảo giá trị dự đoán không âm
+        predictedNextWeek = Math.max(0, predictedNextWeek);
       } else if (amounts.length === 1) {
         predictedNextWeek = amounts[0];
-      }
-
-      // Tính xu hướng
-      let trend = 0;
-      if (amounts.length >= 2) {
-        const firstHalf = amounts.slice(0, Math.floor(amounts.length / 2));
-        const secondHalf = amounts.slice(Math.floor(amounts.length / 2));
-        const firstHalfAvg = calculateMean(firstHalf);
-        const secondHalfAvg = calculateMean(secondHalf);
-        trend = secondHalfAvg - firstHalfAvg;
       }
 
       return {
@@ -1264,6 +1429,7 @@ const predictCategorySpending = async (userId, options = {}) => {
           nextWeek: predictedNextWeek,
           trend,
           trendDirection: trend > 0 ? "increasing" : trend < 0 ? "decreasing" : "stable",
+          confidence: confidence, // Độ tin cậy của dự đoán
         },
       };
     });
@@ -1351,15 +1517,47 @@ const suggestOptimizeSpending = async (userId, options = {}) => {
     // Tính tổng chi tiêu
     const totalExpense = categoryStats.reduce((sum, cat) => sum + cat.totalAmount, 0);
 
-    // Tìm danh mục chi nhiều và có thể giảm
+    // Phân tích chi tiết và tính toán gợi ý tối ưu thông minh
     const suggestions = categoryStats
       .filter((cat) => {
         const percentage = (cat.totalAmount / totalExpense) * 100;
-        return percentage >= thresholdPercent; // Chiếm >= threshold% tổng chi
+        return percentage >= thresholdPercent;
       })
       .map((cat) => {
         const percentage = (cat.totalAmount / totalExpense) * 100;
-        const suggestedReduction = cat.totalAmount * 0.15; // Gợi ý giảm 15%
+        
+        // Tính toán % giảm đề xuất dựa trên phân tích
+        // Nếu chi tiêu chiếm >30% tổng chi → giảm 20%
+        // Nếu chi tiêu chiếm 20-30% → giảm 15%
+        // Nếu chi tiêu chiếm <20% → giảm 10%
+        let reductionPercent = 10;
+        if (percentage >= 30) {
+          reductionPercent = 20;
+        } else if (percentage >= 20) {
+          reductionPercent = 15;
+        }
+        
+        const suggestedReduction = cat.totalAmount * (reductionPercent / 100);
+        const suggestedNewAmount = cat.totalAmount - suggestedReduction;
+        
+        // Tính độ biến thiên để đánh giá khả năng tiết kiệm
+        // Lấy lịch sử chi tiêu của category này để phân tích
+        const mean = cat.avgAmount;
+        const stdDev = calculateStdDev([cat.totalAmount], mean);
+        const zScore = calculateZScore(cat.totalAmount, mean, stdDev);
+        
+        // Nếu có biến thiên lớn (outlier) → có thể tiết kiệm nhiều hơn
+        const adjustmentFactor = Math.abs(zScore) > 1.5 ? 1.2 : 1.0;
+        const adjustedSavings = suggestedReduction * adjustmentFactor;
+        
+        // Tính priority dựa trên nhiều yếu tố
+        let priority = "low";
+        if (percentage >= 30 || zScore > 2) {
+          priority = "high";
+        } else if (percentage >= 20 || zScore > 1) {
+          priority = "medium";
+        }
+        
         return {
           categoryId: cat.categoryId,
           categoryName: cat.categoryName,
@@ -1369,14 +1567,21 @@ const suggestOptimizeSpending = async (userId, options = {}) => {
             count: cat.count,
             avgPerTransaction: cat.avgAmount,
             percentageOfTotal: percentage,
+            variance: stdDev, // Độ biến thiên
+            zScore: zScore, // Điểm Z để phát hiện outlier
           },
           suggestion: {
-            reductionPercent: 15,
-            suggestedReduction,
-            suggestedNewAmount: cat.totalAmount - suggestedReduction,
-            potentialSavings: suggestedReduction,
+            reductionPercent: reductionPercent,
+            suggestedReduction: adjustedSavings,
+            suggestedNewAmount: cat.totalAmount - adjustedSavings,
+            potentialSavings: adjustedSavings,
+            reason: zScore > 1.5 
+              ? "Chi tiêu có biến thiên lớn, có thể tối ưu"
+              : percentage >= 30
+              ? "Chiếm tỷ trọng lớn trong tổng chi tiêu"
+              : "Có thể giảm để cân đối ngân sách",
           },
-          priority: percentage >= 30 ? "high" : percentage >= 20 ? "medium" : "low",
+          priority: priority,
         };
       });
 
@@ -1450,15 +1655,55 @@ const suggestBudgetAdjustment = async (userId) => {
         const monthlyAmounts = avgSpendingStats.map((s) => s.totalAmount);
         const avgMonthlySpending = calculateMean(monthlyAmounts);
         const currentLimit = budget.limit_amount;
-
-        // Đề xuất ngân sách mới (120% của trung bình để có buffer)
-        const suggestedLimit = avgMonthlySpending * 1.2;
+        const stdDev = calculateStdDev(monthlyAmounts, avgMonthlySpending);
+        
+        // Tính toán ngân sách đề xuất thông minh hơn
+        // Sử dụng percentile 75th + buffer để đảm bảo không vượt quá thường xuyên
+        const percentile75 = calculatePercentile(monthlyAmounts, 75);
+        const percentile90 = calculatePercentile(monthlyAmounts, 90);
+        
+        // Đề xuất dựa trên phân tích thống kê
+        // Nếu có biến thiên lớn → dùng percentile 90
+        // Nếu biến thiên nhỏ → dùng percentile 75
+        const coefficientOfVariation = stdDev / avgMonthlySpending;
+        let suggestedLimit;
+        
+        if (coefficientOfVariation > 0.3) {
+          // Biến thiên lớn → dùng percentile 90 + 10% buffer
+          suggestedLimit = percentile90 * 1.1;
+        } else if (coefficientOfVariation > 0.15) {
+          // Biến thiên trung bình → dùng percentile 75 + 15% buffer
+          suggestedLimit = percentile75 * 1.15;
+        } else {
+          // Biến thiên nhỏ → dùng trung bình + 20% buffer
+          suggestedLimit = avgMonthlySpending * 1.2;
+        }
+        
+        // Đảm bảo suggested limit không quá thấp hoặc quá cao
+        const minLimit = avgMonthlySpending * 1.1; // Tối thiểu 110% trung bình
+        const maxLimit = percentile90 * 1.5; // Tối đa 150% percentile 90
+        suggestedLimit = Math.max(minLimit, Math.min(suggestedLimit, maxLimit));
+        
         const difference = suggestedLimit - currentLimit;
         const differencePercent = calculateGrowthPercent(suggestedLimit, currentLimit);
 
         // Kiểm tra xem có vượt ngân sách thường xuyên không
         const overrunCount = monthlyAmounts.filter((amount) => amount > currentLimit).length;
         const overrunRate = (overrunCount / monthlyAmounts.length) * 100;
+        
+        // Tính toán lý do đề xuất dựa trên phân tích
+        let reason;
+        if (avgMonthlySpending > currentLimit * 1.1) {
+          reason = `Chi tiêu trung bình (${avgMonthlySpending.toLocaleString("vi-VN")} VND) vượt ngân sách hiện tại`;
+        } else if (avgMonthlySpending < currentLimit * 0.7) {
+          reason = `Ngân sách hiện tại quá cao so với chi tiêu thực tế (${avgMonthlySpending.toLocaleString("vi-VN")} VND)`;
+        } else if (overrunRate >= 50) {
+          reason = `Vượt ngân sách thường xuyên (${overrunRate.toFixed(0)}% thời gian)`;
+        } else if (coefficientOfVariation > 0.3) {
+          reason = `Chi tiêu có biến thiên lớn, cần buffer cao hơn`;
+        } else {
+          reason = `Điều chỉnh để phù hợp với xu hướng chi tiêu`;
+        }
 
         suggestions.push({
           budgetId: budget._id,
@@ -1478,12 +1723,14 @@ const suggestBudgetAdjustment = async (userId) => {
             suggestedLimit,
             difference,
             differencePercent,
-            reason:
-              avgMonthlySpending > currentLimit
-                ? "Chi tiêu trung bình vượt ngân sách hiện tại"
-                : avgMonthlySpending < currentLimit * 0.7
-                ? "Ngân sách hiện tại quá cao so với chi tiêu thực tế"
-                : "Điều chỉnh để phù hợp với xu hướng chi tiêu",
+            reason: reason,
+            statisticalAnalysis: {
+              avgSpending: avgMonthlySpending,
+              stdDev: stdDev,
+              percentile75: percentile75,
+              percentile90: percentile90,
+              coefficientOfVariation: coefficientOfVariation,
+            },
           },
           priority: overrunRate >= 50 ? "high" : avgMonthlySpending > currentLimit ? "medium" : "low",
         });
@@ -1541,15 +1788,40 @@ const suggestWalletTransfer = async (userId) => {
       }
     }
 
-    // Tạo gợi ý chuyển tiền
-    lowBalanceWallets.forEach((lowWallet) => {
-      highBalanceWallets.forEach((highWallet) => {
-        const suggestedAmount = Math.min(
-          Math.abs(lowWallet.currentBalance) + threshold * 2, // Đủ để ví có ít nhất 200k
-          highWallet.currentBalance * 0.3 // Chỉ chuyển tối đa 30% từ ví dư
-        );
+    // Thuật toán tối ưu chuyển tiền: Greedy Algorithm
+    // Sắp xếp ví thiếu theo mức độ cần thiết (âm số dư > sắp hết)
+    lowBalanceWallets.sort((a, b) => {
+      if (a.currentBalance < 0 && b.currentBalance >= 0) return -1;
+      if (a.currentBalance >= 0 && b.currentBalance < 0) return 1;
+      return a.currentBalance - b.currentBalance;
+    });
 
-        if (suggestedAmount > threshold) {
+    // Sắp xếp ví dư theo số dư giảm dần
+    highBalanceWallets.sort((a, b) => b.currentBalance - a.currentBalance);
+
+    // Tối ưu hóa: Chuyển từ ví dư nhất sang ví thiếu nhất
+    const usedHighWallets = new Set();
+    
+    lowBalanceWallets.forEach((lowWallet) => {
+      const neededAmount = Math.abs(lowWallet.currentBalance) + threshold * 2; // Cần ít nhất 200k
+      
+      // Tìm ví dư phù hợp nhất (đủ tiền và chưa được sử dụng nhiều)
+      for (const highWallet of highBalanceWallets) {
+        if (usedHighWallets.has(highWallet.walletId.toString())) continue;
+        
+        // Tính số tiền có thể chuyển
+        // Không chuyển quá 30% từ ví dư, và đảm bảo ví dư còn ít nhất 100k
+        const maxFromHigh = Math.min(
+          highWallet.currentBalance * 0.3,
+          highWallet.currentBalance - threshold
+        );
+        
+        if (maxFromHigh < threshold) continue;
+        
+        // Số tiền đề xuất: đủ để ví thiếu có 200k, nhưng không quá 30% ví dư
+        const suggestedAmount = Math.min(neededAmount, maxFromHigh);
+        
+        if (suggestedAmount >= threshold) {
           suggestions.push({
             fromWallet: {
               id: highWallet.walletId,
@@ -1562,15 +1834,34 @@ const suggestWalletTransfer = async (userId) => {
               name: lowWallet.walletName,
               type: lowWallet.walletType,
               currentBalance: lowWallet.currentBalance,
+              isLow: true,
             },
-            suggestedAmount,
+            suggestedAmount: Math.round(suggestedAmount),
             reason: lowWallet.currentBalance < 0 
-              ? "Ví đang âm số dư"
-              : "Ví sắp hết tiền",
-            priority: lowWallet.currentBalance < 0 ? "high" : "medium",
+              ? "Ví đang âm số dư, cần chuyển ngay"
+              : lowWallet.currentBalance < threshold
+              ? "Ví sắp hết tiền, cần bổ sung"
+              : "Cân đối số dư giữa các ví",
+            priority: lowWallet.currentBalance < 0 
+              ? "high" 
+              : lowWallet.currentBalance < threshold 
+              ? "medium" 
+              : "low",
+            optimization: {
+              neededAmount: neededAmount,
+              availableFromHigh: maxFromHigh,
+              transferEfficiency: (suggestedAmount / neededAmount) * 100, // % đáp ứng nhu cầu
+            },
           });
+          
+          // Đánh dấu ví dư đã được sử dụng (có thể dùng lại nếu còn dư)
+          if (suggestedAmount >= maxFromHigh * 0.8) {
+            usedHighWallets.add(highWallet.walletId.toString());
+          }
+          
+          break; // Đã tìm được ví phù hợp, chuyển sang ví thiếu tiếp theo
         }
-      });
+      }
     });
 
     return {

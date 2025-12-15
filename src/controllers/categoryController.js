@@ -2,70 +2,78 @@ const { createCategory, getAllCategories, getCategoryById, updateCategory, delet
 
 const createCategoryAPI = async (req, res) => {
   let category = await createCategory(req.user.id, req.body.data);
-  if (category){
+  if (category && category.status !== false){
     return res.status(201).json({
       EC: 0,
-      data: category,
+      message: category.message || "Created successfully",
+      data: category.data,
     });
   }
   return res.status(200).json({
-    EC: -1,
+    EC: category?.error || -1,
+    message: category?.message || "Create category failed",
     data: null,
   })
 }
 
 const getAllCategoriesAPI = async (req, res) => {
   let categories = await getAllCategories(req.user.id);
-  if (categories){
-    return res.status(201).json({
+  if (categories && categories.status !== false){
+    return res.status(200).json({
       EC: 0,
-      data: categories,
+      data: categories.data || categories,
     });
   }
   return res.status(200).json({
-    EC: -1,
+    EC: categories?.error || -1,
+    message: categories?.message || "Get categories failed",
     data: null,
   })
 }
 
 const getCategoryByIdAPI = async (req, res) => {
-  let category = await getCategoryById(req.body.categoryId, req.user.id);
-  if (category){
-    return res.status(201).json({
+  let category = await getCategoryById(req.params.id, req.user.id);
+  if (category && category.status !== false){
+    return res.status(200).json({
       EC: 0,
-      data: category,
+      data: category.data || category,
     });
   }
   return res.status(200).json({
-    EC: -1,
+    EC: category?.error || -1,
+    message: category?.message || "Category not found",
     data: null,
   })
 }
 
 const updateCategoryAPI = async (req, res) => {
-  let category = await updateCategory(req.body.categoryId, req.user.id, req.body.data);
-  if (category){
-    return res.status(201).json({
+  let category = await updateCategory(req.params.id, req.user.id, req.body.data);
+  if (category && category.status !== false){
+    return res.status(200).json({
       EC: 0,
-      data: category,
+      message: category.message || "Updated successfully",
+      data: category.data,
     });
   }
   return res.status(200).json({
-    EC: -1,
+    EC: category?.error || -1,
+    message: category?.message || "Update failed",
     data: null,
   })
 }
 
 const deleteCategoryAPI = async (req, res) => {
-  let category = await deleteCategory(req.body.categoryId, req.user.id);
-  if (category){
-    return res.status(201).json({
+  let category = await deleteCategory(req.params.id, req.user.id);
+  if (category && category.status !== false){
+    return res.status(200).json({
       EC: 0,
-      data: category,
+      message: category.message || "Deleted successfully",
+      data: category.data,
     });
   }
   return res.status(200).json({
-    EC: -1,
+    EC: category?.error || -1,
+    message: category?.message || "Delete failed",
     data: null,
   })
 }

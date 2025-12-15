@@ -6,13 +6,25 @@ const Wallet = require("../models/wallet");
  * Helper: Lấy dữ liệu tài chính trong một khoảng thời gian
  */
 const getPeriodData = async (userId, startDate, endDate) => {
+  // Đảm bảo userId là ObjectId
+  const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+  
   const matchQuery = {
-    userId,
+    userId: userIdObj,
     date: {
       $gte: new Date(startDate),
       $lte: new Date(endDate),
     },
   };
+
+  console.log("🔍 [getPeriodData] Query params:", {
+    userId: userIdObj.toString(),
+    userIdType: typeof userId,
+    startDate: new Date(startDate).toISOString(),
+    endDate: new Date(endDate).toISOString(),
+    startDateLocal: new Date(startDate).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+    endDateLocal: new Date(endDate).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+  });
 
   const stats = await Transaction.aggregate([
     { $match: matchQuery },
@@ -25,6 +37,26 @@ const getPeriodData = async (userId, startDate, endDate) => {
     },
   ]);
 
+  console.log("📊 [getPeriodData] Aggregation results:", JSON.stringify(stats, null, 2));
+
+  // Kiểm tra tổng số transaction trong khoảng thời gian
+  const totalTransactions = await Transaction.countDocuments(matchQuery);
+  console.log("📈 [getPeriodData] Total transactions found:", totalTransactions);
+  
+  // Nếu không có transaction, kiểm tra xem có transaction nào của user này không
+  if (totalTransactions === 0) {
+    const userTotalTransactions = await Transaction.countDocuments({ userId: userIdObj });
+    console.log("⚠️ [getPeriodData] WARNING: No transactions in this period!");
+    console.log("   But user has total transactions:", userTotalTransactions);
+    if (userTotalTransactions > 0) {
+      const sampleTransaction = await Transaction.findOne({ userId: userIdObj });
+      if (sampleTransaction) {
+        console.log("   Sample transaction date:", sampleTransaction.date.toISOString());
+        console.log("   Sample transaction date local:", sampleTransaction.date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }));
+      }
+    }
+  }
+
   let totalIncome = 0;
   let totalExpense = 0;
 
@@ -34,11 +66,14 @@ const getPeriodData = async (userId, startDate, endDate) => {
   const expenseStat = stats.find((s) => s._id === "expense");
   if (expenseStat) totalExpense = expenseStat.totalAmount;
 
-  return {
+  const result = {
     totalIncome,
     totalExpense,
     balance: totalIncome - totalExpense,
   };
+
+  console.log("✅ [getPeriodData] Final result:", result);
+  return result;
 };
 
 /**
@@ -137,14 +172,19 @@ const getFinancialDashboard = async (userId, options = {}) => {
   try {
     const { startDate, endDate } = options;
 
+    // Đảm bảo userId là ObjectId
+    const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+
     // Xây dựng query filter cho transaction
-    const matchQuery = { userId };
+    const matchQuery = { userId: userIdObj };
     
     // Lọc theo khoảng thời gian nếu có
     if (startDate || endDate) {
       matchQuery.date = {};
       if (startDate) {
-        matchQuery.date.$gte = new Date(startDate);
+        const startDateObj = new Date(startDate);
+        startDateObj.setHours(0, 0, 0, 0);
+        matchQuery.date.$gte = startDateObj;
       }
       if (endDate) {
         // Set thời gian cuối ngày (23:59:59.999)
@@ -153,6 +193,13 @@ const getFinancialDashboard = async (userId, options = {}) => {
         matchQuery.date.$lte = endDateTime;
       }
     }
+
+    console.log("📊 [getFinancialDashboard] Query params:", {
+      userId: userIdObj.toString(),
+      startDate: startDate ? new Date(startDate).toISOString() : null,
+      endDate: endDate ? new Date(endDate).toISOString() : null,
+      matchQuery: JSON.stringify(matchQuery, null, 2),
+    });
 
     // Tính tổng thu và tổng chi từ transaction
     // Tổng thu: chỉ tính income (thu nhập thực tế)
@@ -181,9 +228,15 @@ const getFinancialDashboard = async (userId, options = {}) => {
     const expenseStat = stats.find((s) => s._id === "expense");
     if (expenseStat) totalExpense = expenseStat.totalAmount;
 
+    console.log("📊 [getFinancialDashboard] Aggregation results:", JSON.stringify(stats, null, 2));
+    
+    // Kiểm tra tổng số transaction
+    const totalTransactions = await Transaction.countDocuments(matchQuery);
+    console.log("📈 [getFinancialDashboard] Total transactions found:", totalTransactions);
+
     // Tính tổng số dư tất cả ví của user (chỉ tính ví chưa bị archive và chưa xóa)
     const wallets = await Wallet.find({ 
-      userId,
+      userId: userIdObj,
       is_archived: false,
     }).lean();
 
@@ -193,6 +246,14 @@ const getFinancialDashboard = async (userId, options = {}) => {
 
     // Tính chênh lệch thu - chi
     const balance = totalIncome - totalExpense;
+
+    console.log("✅ [getFinancialDashboard] Final results:", {
+      totalIncome,
+      totalExpense,
+      totalWalletBalance,
+      balance,
+      walletCount: wallets.length,
+    });
 
     // Kết quả trả về
     const result = {
@@ -231,10 +292,26 @@ const compareCurrentMonthWithPrevious = async (userId) => {
     const currentRange = getCurrentMonthRange();
     const previousRange = getPreviousMonthRange();
 
+    console.log("📅 [compareCurrentMonthWithPrevious] Current month range:", {
+      start: currentRange.startDate.toISOString(),
+      end: currentRange.endDate.toISOString(),
+      startLocal: currentRange.startDate.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+      endLocal: currentRange.endDate.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+    });
+    console.log("📅 [compareCurrentMonthWithPrevious] Previous month range:", {
+      start: previousRange.startDate.toISOString(),
+      end: previousRange.endDate.toISOString(),
+      startLocal: previousRange.startDate.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+      endLocal: previousRange.endDate.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+    });
+
     const [currentData, previousData] = await Promise.all([
       getPeriodData(userId, currentRange.startDate, currentRange.endDate),
       getPeriodData(userId, previousRange.startDate, previousRange.endDate),
     ]);
+
+    console.log("📊 [compareCurrentMonthWithPrevious] Current data:", currentData);
+    console.log("📊 [compareCurrentMonthWithPrevious] Previous data:", previousData);
 
     const result = {
       current: {
@@ -521,17 +598,27 @@ const getTimeBasedReportByDay = async (userId, options = {}) => {
       };
     }
 
+    // Đảm bảo userId là ObjectId
+    const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+
+    // Set thời gian đầu ngày và cuối ngày
+    const startDateObj = new Date(startDate);
+    startDateObj.setHours(0, 0, 0, 0);
+    
+    const endDateObj = new Date(endDate);
+    endDateObj.setHours(23, 59, 59, 999);
+
     const matchQuery = {
-      userId,
+      userId: userIdObj,
       date: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
+        $gte: startDateObj,
+        $lte: endDateObj,
       },
     };
 
-    if (type) matchQuery.type = type;
-    if (walletId) matchQuery.walletId = new mongoose.Types.ObjectId(walletId);
-    if (categoryId) matchQuery.categoryId = new mongoose.Types.ObjectId(categoryId);
+    if (type && type !== "all") matchQuery.type = type;
+    if (walletId && walletId !== "all") matchQuery.walletId = new mongoose.Types.ObjectId(walletId);
+    if (categoryId && categoryId !== "all") matchQuery.categoryId = new mongoose.Types.ObjectId(categoryId);
 
     const stats = await Transaction.aggregate([
       { $match: matchQuery },
@@ -552,17 +639,20 @@ const getTimeBasedReportByDay = async (userId, options = {}) => {
       { $sort: { _id: 1 } },
     ]);
 
+    const result = stats.map((item) => ({
+      date: item._id,
+      label: item._id, // Thêm label để frontend có thể dùng
+      totalIncome: item.totalIncome,
+      totalExpense: item.totalExpense,
+      balance: item.totalIncome - item.totalExpense,
+      count: item.count,
+    }));
+
     return {
       status: true,
       error: 0,
       message: "Lấy báo cáo theo ngày thành công",
-      data: stats.map((item) => ({
-        date: item._id,
-        totalIncome: item.totalIncome,
-        totalExpense: item.totalExpense,
-        balance: item.totalIncome - item.totalExpense,
-        count: item.count,
-      })),
+      data: result,
     };
   } catch (error) {
     return {
@@ -590,17 +680,34 @@ const getTimeBasedReportByWeek = async (userId, options = {}) => {
       };
     }
 
+    // Đảm bảo userId là ObjectId
+    const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+
+    // Set thời gian cuối ngày để lấy hết dữ liệu trong ngày cuối
+    const startDateObj = new Date(startDate);
+    startDateObj.setHours(0, 0, 0, 0);
+    
+    const endDateObj = new Date(endDate);
+    endDateObj.setHours(23, 59, 59, 999);
+
     const matchQuery = {
-      userId,
+      userId: userIdObj,
       date: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
+        $gte: startDateObj,
+        $lte: endDateObj,
       },
     };
 
-    if (type) matchQuery.type = type;
-    if (walletId) matchQuery.walletId = new mongoose.Types.ObjectId(walletId);
-    if (categoryId) matchQuery.categoryId = new mongoose.Types.ObjectId(categoryId);
+    if (type && type !== "all") matchQuery.type = type;
+    if (walletId && walletId !== "all") matchQuery.walletId = new mongoose.Types.ObjectId(walletId);
+    if (categoryId && categoryId !== "all") matchQuery.categoryId = new mongoose.Types.ObjectId(categoryId);
+
+    console.log("📅 [getTimeBasedReportByWeek] Query params:", {
+      userId: userIdObj.toString(),
+      startDate: startDateObj.toISOString(),
+      endDate: endDateObj.toISOString(),
+      matchQuery: JSON.stringify(matchQuery, null, 2),
+    });
 
     const stats = await Transaction.aggregate([
       { $match: matchQuery },
@@ -622,21 +729,72 @@ const getTimeBasedReportByWeek = async (userId, options = {}) => {
       { $sort: { "_id.year": 1, "_id.week": 1 } },
     ]);
 
-    return {
-      status: true,
-      error: 0,
-      message: "Lấy báo cáo theo tuần thành công",
-      data: stats.map((item) => ({
+    console.log("📊 [getTimeBasedReportByWeek] Aggregation results:", JSON.stringify(stats, null, 2));
+
+    // Helper function để tính ngày đầu và cuối tuần từ year và week number (ISO week)
+    const getWeekDateRange = (year, week) => {
+      // MongoDB $week sử dụng ISO week numbering
+      // Tuần đầu tiên của năm là tuần có ngày 4 tháng 1
+      // Tuần bắt đầu từ Thứ 2
+      
+      // Tìm ngày 4 tháng 1 của năm (điểm tham chiếu cho tuần đầu tiên)
+      const jan4 = new Date(year, 0, 4);
+      
+      // Tìm thứ của ngày 4/1 (0 = Chủ nhật, 1 = Thứ 2, ..., 6 = Thứ 7)
+      const dayOfWeek = jan4.getDay();
+      
+      // Tính số ngày cần trừ để đến Thứ 2 của tuần chứa ngày 4/1
+      // ISO week: Thứ 2 = 1, Thứ 3 = 2, ..., Chủ nhật = 0 (nhưng tính là 7)
+      const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+      
+      // Tính ngày Thứ 2 của tuần đầu tiên (tuần chứa ngày 4/1)
+      const firstMonday = new Date(jan4);
+      firstMonday.setDate(jan4.getDate() + daysToMonday);
+      
+      // Tính ngày đầu tuần của tuần cần tìm (cộng (week - 1) * 7 ngày)
+      const weekStart = new Date(firstMonday);
+      weekStart.setDate(firstMonday.getDate() + (week - 1) * 7);
+      
+      // Tính ngày cuối tuần (Chủ nhật = Thứ 2 + 6 ngày)
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
+      
+      return { weekStart, weekEnd };
+    };
+
+    // Format date thành DD/MM
+    const formatDate = (date) => {
+      const day = String(date.getDate()).padStart(2, '0');
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      return `${day}/${month}`;
+    };
+
+    const result = stats.map((item) => {
+      const { weekStart, weekEnd } = getWeekDateRange(item._id.year, item._id.week);
+      const startDateStr = formatDate(weekStart);
+      const endDateStr = formatDate(weekEnd);
+      
+      return {
         year: item._id.year,
         week: item._id.week,
-        label: `Tuần ${item._id.week}/${item._id.year}`,
+        label: `${startDateStr} - ${endDateStr}`,
         totalIncome: item.totalIncome,
         totalExpense: item.totalExpense,
         balance: item.totalIncome - item.totalExpense,
         count: item.count,
-      })),
+      };
+    });
+
+    console.log("✅ [getTimeBasedReportByWeek] Final result:", JSON.stringify(result, null, 2));
+
+    return {
+      status: true,
+      error: 0,
+      message: "Lấy báo cáo theo tuần thành công",
+      data: result,
     };
   } catch (error) {
+    console.error("❌ [getTimeBasedReportByWeek] Error:", error);
     return {
       status: false,
       error: -1,
@@ -662,17 +820,60 @@ const getTimeBasedReportByMonth = async (userId, options = {}) => {
       };
     }
 
+    // Đảm bảo userId là ObjectId
+    const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+
+    // Set thời gian cuối ngày để lấy hết dữ liệu trong ngày cuối
+    const startDateObj = new Date(startDate);
+    startDateObj.setHours(0, 0, 0, 0);
+    
+    const endDateObj = new Date(endDate);
+    endDateObj.setHours(23, 59, 59, 999);
+
+    console.log("📅 [getTimeBasedReportByMonth] Query params:", {
+      userId: userIdObj.toString(),
+      startDate: startDateObj.toISOString(),
+      endDate: endDateObj.toISOString(),
+      startDateLocal: startDateObj.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+      endDateLocal: endDateObj.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+      type,
+      walletId,
+      categoryId,
+    });
+
     const matchQuery = {
-      userId,
+      userId: userIdObj,
       date: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
+        $gte: startDateObj,
+        $lte: endDateObj,
       },
     };
 
-    if (type) matchQuery.type = type;
-    if (walletId) matchQuery.walletId = new mongoose.Types.ObjectId(walletId);
-    if (categoryId) matchQuery.categoryId = new mongoose.Types.ObjectId(categoryId);
+    if (type && type !== "all") matchQuery.type = type;
+    if (walletId && walletId !== "all") matchQuery.walletId = new mongoose.Types.ObjectId(walletId);
+    if (categoryId && categoryId !== "all") matchQuery.categoryId = new mongoose.Types.ObjectId(categoryId);
+
+    console.log("🔍 [getTimeBasedReportByMonth] Match query:", JSON.stringify(matchQuery, null, 2));
+
+    // Kiểm tra tổng số transaction trong khoảng thời gian
+    const totalTransactions = await Transaction.countDocuments(matchQuery);
+    console.log("📈 [getTimeBasedReportByMonth] Total transactions found:", totalTransactions);
+
+    // Nếu không có transaction, kiểm tra xem có transaction nào của user này không
+    if (totalTransactions === 0) {
+      const userTotalTransactions = await Transaction.countDocuments({ userId: userIdObj });
+      console.log("⚠️ [getTimeBasedReportByMonth] WARNING: No transactions in this period!");
+      console.log("   But user has total transactions:", userTotalTransactions);
+      
+      if (userTotalTransactions > 0) {
+        // Lấy một transaction mẫu để xem date format
+        const sampleTransaction = await Transaction.findOne({ userId: userIdObj }).lean();
+        if (sampleTransaction) {
+          console.log("   Sample transaction date:", sampleTransaction.date.toISOString());
+          console.log("   Sample transaction date local:", sampleTransaction.date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }));
+        }
+      }
+    }
 
     const stats = await Transaction.aggregate([
       { $match: matchQuery },
@@ -694,19 +895,26 @@ const getTimeBasedReportByMonth = async (userId, options = {}) => {
       { $sort: { "_id.year": 1, "_id.month": 1 } },
     ]);
 
+    console.log("📊 [getTimeBasedReportByMonth] Aggregation results:", JSON.stringify(stats, null, 2));
+    console.log("📊 [getTimeBasedReportByMonth] Number of months:", stats.length);
+
+    const result = stats.map((item) => ({
+      year: item._id.year,
+      month: item._id.month,
+      label: `Tháng ${item._id.month}/${item._id.year}`,
+      totalIncome: item.totalIncome,
+      totalExpense: item.totalExpense,
+      balance: item.totalIncome - item.totalExpense,
+      count: item.count,
+    }));
+
+    console.log("✅ [getTimeBasedReportByMonth] Final result:", JSON.stringify(result, null, 2));
+
     return {
       status: true,
       error: 0,
       message: "Lấy báo cáo theo tháng thành công",
-      data: stats.map((item) => ({
-        year: item._id.year,
-        month: item._id.month,
-        label: `Tháng ${item._id.month}/${item._id.year}`,
-        totalIncome: item.totalIncome,
-        totalExpense: item.totalExpense,
-        balance: item.totalIncome - item.totalExpense,
-        count: item.count,
-      })),
+      data: result,
     };
   } catch (error) {
     return {
@@ -734,17 +942,60 @@ const getTimeBasedReportByYear = async (userId, options = {}) => {
       };
     }
 
+    // Đảm bảo userId là ObjectId
+    const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+
+    // Set thời gian cuối ngày để lấy hết dữ liệu trong ngày cuối
+    const startDateObj = new Date(startDate);
+    startDateObj.setHours(0, 0, 0, 0);
+    
+    const endDateObj = new Date(endDate);
+    endDateObj.setHours(23, 59, 59, 999);
+
+    console.log("📅 [getTimeBasedReportByYear] Query params:", {
+      userId: userIdObj.toString(),
+      startDate: startDateObj.toISOString(),
+      endDate: endDateObj.toISOString(),
+      startDateLocal: startDateObj.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+      endDateLocal: endDateObj.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
+      type,
+      walletId,
+      categoryId,
+    });
+
     const matchQuery = {
-      userId,
+      userId: userIdObj,
       date: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
+        $gte: startDateObj,
+        $lte: endDateObj,
       },
     };
 
-    if (type) matchQuery.type = type;
-    if (walletId) matchQuery.walletId = new mongoose.Types.ObjectId(walletId);
-    if (categoryId) matchQuery.categoryId = new mongoose.Types.ObjectId(categoryId);
+    if (type && type !== "all") matchQuery.type = type;
+    if (walletId && walletId !== "all") matchQuery.walletId = new mongoose.Types.ObjectId(walletId);
+    if (categoryId && categoryId !== "all") matchQuery.categoryId = new mongoose.Types.ObjectId(categoryId);
+
+    console.log("🔍 [getTimeBasedReportByYear] Match query:", JSON.stringify(matchQuery, null, 2));
+
+    // Kiểm tra tổng số transaction trong khoảng thời gian
+    const totalTransactions = await Transaction.countDocuments(matchQuery);
+    console.log("📈 [getTimeBasedReportByYear] Total transactions found:", totalTransactions);
+
+    // Nếu không có transaction, kiểm tra xem có transaction nào của user này không
+    if (totalTransactions === 0) {
+      const userTotalTransactions = await Transaction.countDocuments({ userId: userIdObj });
+      console.log("⚠️ [getTimeBasedReportByYear] WARNING: No transactions in this period!");
+      console.log("   But user has total transactions:", userTotalTransactions);
+      
+      if (userTotalTransactions > 0) {
+        // Lấy một transaction mẫu để xem date format
+        const sampleTransaction = await Transaction.findOne({ userId: userIdObj }).lean();
+        if (sampleTransaction) {
+          console.log("   Sample transaction date:", sampleTransaction.date.toISOString());
+          console.log("   Sample transaction date local:", sampleTransaction.date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }));
+        }
+      }
+    }
 
     const stats = await Transaction.aggregate([
       { $match: matchQuery },
@@ -763,18 +1014,25 @@ const getTimeBasedReportByYear = async (userId, options = {}) => {
       { $sort: { _id: 1 } },
     ]);
 
+    console.log("📊 [getTimeBasedReportByYear] Aggregation results:", JSON.stringify(stats, null, 2));
+    console.log("📊 [getTimeBasedReportByYear] Number of years:", stats.length);
+
+    const result = stats.map((item) => ({
+      year: item._id,
+      label: `Năm ${item._id}`,
+      totalIncome: item.totalIncome,
+      totalExpense: item.totalExpense,
+      balance: item.totalIncome - item.totalExpense,
+      count: item.count,
+    }));
+
+    console.log("✅ [getTimeBasedReportByYear] Final result:", JSON.stringify(result, null, 2));
+
     return {
       status: true,
       error: 0,
       message: "Lấy báo cáo theo năm thành công",
-      data: stats.map((item) => ({
-        year: item._id,
-        label: `Năm ${item._id}`,
-        totalIncome: item.totalIncome,
-        totalExpense: item.totalExpense,
-        balance: item.totalIncome - item.totalExpense,
-        count: item.count,
-      })),
+      data: result,
     };
   } catch (error) {
     return {
@@ -793,20 +1051,34 @@ const getCategoryExpenseReport = async (userId, options = {}) => {
   try {
     const { startDate, endDate, limit } = options;
 
+    // Đảm bảo userId là ObjectId
+    const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+
     const matchQuery = {
-      userId,
+      userId: userIdObj,
       type: "expense",
     };
 
     if (startDate || endDate) {
       matchQuery.date = {};
-      if (startDate) matchQuery.date.$gte = new Date(startDate);
+      if (startDate) {
+        const startDateObj = new Date(startDate);
+        startDateObj.setHours(0, 0, 0, 0);
+        matchQuery.date.$gte = startDateObj;
+      }
       if (endDate) {
         const endDateTime = new Date(endDate);
         endDateTime.setHours(23, 59, 59, 999);
         matchQuery.date.$lte = endDateTime;
       }
     }
+
+    console.log("📊 [getCategoryExpenseReport] Query params:", {
+      userId: userIdObj.toString(),
+      startDate: startDate ? new Date(startDate).toISOString() : null,
+      endDate: endDate ? new Date(endDate).toISOString() : null,
+      matchQuery: JSON.stringify(matchQuery, null, 2),
+    });
 
     const stats = await Transaction.aggregate([
       { $match: matchQuery },
@@ -838,6 +1110,13 @@ const getCategoryExpenseReport = async (userId, options = {}) => {
       { $sort: { totalAmount: -1 } },
       ...(limit ? [{ $limit: parseInt(limit) }] : []),
     ]);
+
+    console.log("📊 [getCategoryExpenseReport] Aggregation results:", JSON.stringify(stats, null, 2));
+    console.log("📊 [getCategoryExpenseReport] Number of categories:", stats.length);
+
+    // Kiểm tra tổng số transaction
+    const totalTransactions = await Transaction.countDocuments(matchQuery);
+    console.log("📈 [getCategoryExpenseReport] Total expense transactions found:", totalTransactions);
 
     return {
       status: true,
@@ -1037,57 +1316,165 @@ const getWalletExpenseReport = async (userId, options = {}) => {
   try {
     const { startDate, endDate } = options;
 
-    const matchQuery = {
-      userId,
-      type: { $in: ["expense", "income"] },
-    };
+    // Đảm bảo userId là ObjectId
+    const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
 
-    if (startDate || endDate) {
-      matchQuery.date = {};
-      if (startDate) matchQuery.date.$gte = new Date(startDate);
-      if (endDate) {
-        const endDateTime = new Date(endDate);
-        endDateTime.setHours(23, 59, 59, 999);
-        matchQuery.date.$lte = endDateTime;
-      }
+    // Build date filter cho transaction lookup
+    const transactionDateFilter = {};
+    if (startDate) {
+      const startDateObj = new Date(startDate);
+      startDateObj.setHours(0, 0, 0, 0);
+      transactionDateFilter.$gte = startDateObj;
+    }
+    if (endDate) {
+      const endDateTime = new Date(endDate);
+      endDateTime.setHours(23, 59, 59, 999);
+      transactionDateFilter.$lte = endDateTime;
     }
 
-    const stats = await Transaction.aggregate([
-      { $match: matchQuery },
+    // Build match query cho transaction lookup trong $lookup pipeline
+    // Sử dụng $expr cho các field cần so sánh với biến từ let
+    const lookupMatchConditions = [
+      { $eq: ["$walletId", "$$walletId"] },
+      { $eq: ["$userId", userIdObj] },
+      { $in: ["$type", ["expense", "income"]] },
+      // Filter transaction đã bị xóa (soft delete)
+      { $ne: ["$deleted", true] },
+    ];
+
+    // Thêm date filter vào $expr nếu có
+    if (transactionDateFilter.$gte) {
+      lookupMatchConditions.push({ $gte: ["$date", transactionDateFilter.$gte] });
+    }
+    if (transactionDateFilter.$lte) {
+      lookupMatchConditions.push({ $lte: ["$date", transactionDateFilter.$lte] });
+    }
+
+    const lookupMatchQuery = {
+      $expr: {
+        $and: lookupMatchConditions,
+      },
+    };
+
+    // Bắt đầu từ wallets collection để bao gồm tất cả ví
+    // Lưu ý: mongoose-delete plugin với overrideMethods: "all" không tự động filter trong aggregate()
+    // Nên cần filter thủ công: deleted phải là null, false, hoặc không tồn tại
+    const stats = await Wallet.aggregate([
+      // Lấy tất cả ví của user (không bị xóa và không bị archive)
       {
-        $group: {
-          _id: "$walletId",
-          totalIncome: {
-            $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] },
-          },
-          totalExpense: {
-            $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] },
-          },
-          count: { $sum: 1 },
+        $match: {
+          userId: userIdObj,
+          $or: [
+            { deleted: { $exists: false } },
+            { deleted: false },
+            { deleted: null },
+          ],
+          is_archived: { $ne: true }, // Không lấy ví đã archive
         },
       },
+      // Left join với transactions để lấy thống kê
       {
         $lookup: {
-          from: "wallets",
-          localField: "_id",
-          foreignField: "_id",
-          as: "wallet",
+          from: "transactions",
+          let: { walletId: "$_id" },
+          pipeline: [
+            {
+              $match: lookupMatchQuery,
+            },
+            {
+              $group: {
+                _id: null,
+                totalIncome: {
+                  $sum: { $cond: [{ $eq: ["$type", "income"] }, "$amount", 0] },
+                },
+                totalExpense: {
+                  $sum: { $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0] },
+                },
+                count: { $sum: 1 },
+              },
+            },
+          ],
+          as: "transactionStats",
         },
       },
-      { $unwind: "$wallet" },
+      // Unwind transaction stats (có thể rỗng nếu không có transaction)
+      {
+        $unwind: {
+          path: "$transactionStats",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      // Project kết quả
       {
         $project: {
           walletId: "$_id",
-          walletName: "$wallet.name",
-          walletType: "$wallet.type",
-          totalIncome: 1,
-          totalExpense: 1,
-          balance: { $subtract: ["$totalIncome", "$totalExpense"] },
-          count: 1,
+          walletName: "$name",
+          walletType: "$type",
+          totalIncome: {
+            $ifNull: ["$transactionStats.totalIncome", 0],
+          },
+          totalExpense: {
+            $ifNull: ["$transactionStats.totalExpense", 0],
+          },
+          balance: {
+            $subtract: [
+              { $ifNull: ["$transactionStats.totalIncome", 0] },
+              { $ifNull: ["$transactionStats.totalExpense", 0] },
+            ],
+          },
+          count: {
+            $ifNull: ["$transactionStats.count", 0],
+          },
         },
       },
+      // Sort theo totalExpense giảm dần
       { $sort: { totalExpense: -1 } },
     ]);
+
+    // Kiểm tra tổng số ví của user (để debug)
+    // Sử dụng withDeleted() để đếm cả ví đã xóa (nếu cần)
+    const totalWallets = await Wallet.countDocuments({ 
+      userId: userIdObj,
+      deleted: { $ne: true },
+    });
+    const activeWallets = await Wallet.countDocuments({ 
+      userId: userIdObj,
+      deleted: { $ne: true },
+      is_archived: { $ne: true },
+    });
+    const archivedWallets = await Wallet.countDocuments({ 
+      userId: userIdObj,
+      deleted: { $ne: true },
+      is_archived: true,
+    });
+
+    // Log chi tiết từng ví để debug
+    const allWallets = await Wallet.find({ 
+      userId: userIdObj,
+      deleted: { $ne: true },
+    }).lean();
+    
+    console.log("📊 [getWalletExpenseReport] Query params:", {
+      userId: userIdObj.toString(),
+      startDate: startDate ? new Date(startDate).toISOString() : null,
+      endDate: endDate ? new Date(endDate).toISOString() : null,
+      walletsFound: stats.length,
+      totalWallets: totalWallets,
+      activeWallets: activeWallets,
+      archivedWallets: archivedWallets,
+      allWallets: allWallets.map(w => ({
+        id: w._id.toString(),
+        name: w.name,
+        type: w.type,
+        is_archived: w.is_archived,
+        deleted: w.deleted,
+      })),
+      statsWallets: stats.map(s => ({
+        id: s.walletId?.toString(),
+        name: s.walletName,
+        type: s.walletType,
+      })),
+    });
 
     return {
       status: true,
@@ -1096,6 +1483,7 @@ const getWalletExpenseReport = async (userId, options = {}) => {
       data: stats,
     };
   } catch (error) {
+    console.error("❌ [getWalletExpenseReport] Error:", error);
     return {
       status: false,
       error: -1,
@@ -1118,14 +1506,18 @@ const getWalletExpenseDistribution = async (userId, options = {}) => {
       return result;
     }
 
-    const totalExpense = result.data.reduce((sum, item) => sum + item.totalExpense, 0);
+    const totalExpense = result.data.reduce((sum, item) => sum + (item.totalExpense || 0), 0);
+    const totalIncome = result.data.reduce((sum, item) => sum + (item.totalIncome || 0), 0);
 
     const distribution = result.data.map((item) => ({
       walletId: item.walletId,
       walletName: item.walletName,
       walletType: item.walletType,
-      totalExpense: item.totalExpense,
-      percentage: totalExpense > 0 ? (item.totalExpense / totalExpense) * 100 : 0,
+      totalIncome: item.totalIncome || 0,
+      totalExpense: item.totalExpense || 0,
+      balance: item.balance || 0,
+      count: item.count || 0,
+      percentage: totalExpense > 0 ? ((item.totalExpense || 0) / totalExpense) * 100 : 0,
     }));
 
     return {
@@ -1135,6 +1527,7 @@ const getWalletExpenseDistribution = async (userId, options = {}) => {
       data: {
         distribution,
         totalExpense,
+        totalIncome,
       },
     };
   } catch (error) {
@@ -1163,12 +1556,22 @@ const compareWalletExpenseOverTime = async (userId, options = {}) => {
       };
     }
 
+    // Đảm bảo userId là ObjectId
+    const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+
+    // Set thời gian đầu ngày và cuối ngày
+    const startDateObj = new Date(startDate);
+    startDateObj.setHours(0, 0, 0, 0);
+    
+    const endDateObj = new Date(endDate);
+    endDateObj.setHours(23, 59, 59, 999);
+
     const matchQuery = {
-      userId,
+      userId: userIdObj,
       type: "expense",
       date: {
-        $gte: new Date(startDate),
-        $lte: new Date(endDate),
+        $gte: startDateObj,
+        $lte: endDateObj,
       },
     };
 

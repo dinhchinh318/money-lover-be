@@ -246,7 +246,7 @@ const createTransaction = async (userId, data) => {
         category = await Category.findOne({ _id: categoryId, userId }).session(session);
         if (!category) throw new Error("Category not found or does not belong to you");
         if ((type === "income" && category.type !== "income") ||
-            (type === "expense" && category.type !== "expense"))
+          (type === "expense" && category.type !== "expense"))
           throw new Error("Category type mismatch");
       }
 
@@ -697,11 +697,23 @@ const getOverviewStats = async (userId, options = {}) => {
   try {
     const { startDate, endDate } = options;
 
-    const matchQuery = { userId };
+    // Đảm bảo userId là ObjectId
+    const mongoose = require("mongoose");
+    const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+
+    const matchQuery = { userId: userIdObj };
     if (startDate || endDate) {
       matchQuery.date = {};
-      if (startDate) matchQuery.date.$gte = new Date(startDate);
-      if (endDate) matchQuery.date.$lte = new Date(endDate);
+      if (startDate) {
+        const startDateObj = new Date(startDate);
+        startDateObj.setHours(0, 0, 0, 0);
+        matchQuery.date.$gte = startDateObj;
+      }
+      if (endDate) {
+        const endDateObj = new Date(endDate);
+        endDateObj.setHours(23, 59, 59, 999);
+        matchQuery.date.$lte = endDateObj;
+      }
     }
 
     const stats = await Transaction.aggregate([
@@ -715,24 +727,35 @@ const getOverviewStats = async (userId, options = {}) => {
       },
     ]);
 
+    // Đếm tổng số giao dịch
+    const transactionCount = await Transaction.countDocuments(matchQuery);
+
     const result = {
-      income: 0,
-      expense: 0,
+      totalIncome: 0,
+      totalExpense: 0,
       debt: 0,
       loan: 0,
       transfer: 0,
       adjust: 0,
+      transactionCount: transactionCount,
     };
 
     stats.forEach((stat) => {
-      result[stat._id] = stat.totalAmount;
+      if (stat._id === "income") {
+        result.totalIncome = stat.totalAmount;
+      } else if (stat._id === "expense") {
+        result.totalExpense = stat.totalAmount;
+      } else {
+        result[stat._id] = stat.totalAmount;
+      }
     });
 
-    result.balance = result.income - result.expense;
+    result.balance = result.totalIncome - result.totalExpense;
 
     return {
       status: true,
       error: 0,
+      message: "Get overview stats successfully",
       data: result,
     };
   } catch (error) {

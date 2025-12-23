@@ -11,8 +11,8 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-    //   "https://bingcloth-be.onrender.com",
-    //   "https://bingcloth.vercel.app",
+      //   "https://bingcloth-be.onrender.com",
+      //   "https://bingcloth.vercel.app",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization", "delay"],
@@ -20,8 +20,9 @@ app.use(
   })
 );
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase body size limit to handle base64 images (up to 5MB)
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use('/api/ai', aiRoutes);
 
 initRoute(app);

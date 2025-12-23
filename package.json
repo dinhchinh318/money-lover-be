@@ -6,8 +6,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "seed": "node scripts/seedData.js",
-    "seed:clear": "node scripts/seedData.js --clear"
+    "seed": "node src/scripts/seedData.js",
+    "seed:clear": "node src/scripts/seedData.js --clear"
   },
   "keywords": [],
   "author": "",

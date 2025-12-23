@@ -304,6 +304,60 @@ const resetPassword = async (email, newPassword) => {
         }
     }
 }
+
+const changePassword = async (userId, currentPassword, newPassword) => {
+    try {
+        const user = await User.findById(userId);
+        if (!user) {
+            return {
+                status: false,
+                error: 1,
+                message: "User not found",
+                data: null,
+            };
+        }
+
+        // Verify current password
+        const isMatch = await user.isPasswordMatch(currentPassword);
+        if (!isMatch) {
+            return {
+                status: false,
+                error: 1,
+                message: "Mật khẩu hiện tại không đúng",
+                data: null,
+            };
+        }
+
+        // Validate new password
+        if (!newPassword || newPassword.length < 6) {
+            return {
+                status: false,
+                error: 1,
+                message: "Mật khẩu mới phải có ít nhất 6 ký tự",
+                data: null,
+            };
+        }
+
+        // Update password
+        user.password = newPassword;
+        await user.save();
+
+        return {
+            status: true,
+            error: 0,
+            message: "Đổi mật khẩu thành công",
+            data: null,
+        };
+    } catch (error) {
+        return {
+            status: false,
+            error: -1,
+            message: error.message || "Error changing password",
+            data: null,
+        };
+    }
+};
+
 module.exports = {
-    getAccount, login, logout, register, refreshAccessToken, forgotPassword, verifyOTP, resetPassword
+    getAccount, login, logout, register, refreshAccessToken, forgotPassword, verifyOTP, resetPassword, changePassword
 }

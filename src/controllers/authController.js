@@ -129,6 +129,78 @@ const getAccountAPI = async (req, res) => {
         });
     }
 }
+
+const updateAccountAPI = async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+        const userService = require("../services/userService");
+        const updateData = {
+            id: userId,
+            ...req.body,
+        };
+
+        const result = await userService.updateUser(updateData);
+
+        if (result && result.status) {
+            return res.status(200).json({
+                EC: 0,
+                message: result.message || "Updated successfully",
+                data: result.data,
+            });
+        }
+
+        return res.status(200).json({
+            EC: result?.error || -1,
+            message: result?.message || "Update failed",
+            data: null,
+        });
+    } catch (error) {
+        console.error("Error updating account:", error);
+        return res.status(500).json({
+            EC: -1,
+            message: error.message || "Server error",
+            data: null,
+        });
+    }
+}
+
+const changePasswordAPI = async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                EC: 1,
+                message: "Vui lòng nhập đầy đủ mật khẩu",
+                data: null,
+            });
+        }
+
+        const result = await authService.changePassword(userId, currentPassword, newPassword);
+
+        if (result && result.status) {
+            return res.status(200).json({
+                EC: 0,
+                message: result.message || "Changed password successfully",
+                data: result.data,
+            });
+        }
+
+        return res.status(200).json({
+            EC: result?.error || -1,
+            message: result?.message || "Change password failed",
+            data: null,
+        });
+    } catch (error) {
+        console.error("Error changing password:", error);
+        return res.status(500).json({
+            EC: -1,
+            message: error.message || "Server error",
+            data: null,
+        });
+    }
+}
 const forgotPasswordAPI = async (req, res) => {
     try {
         const { email } = req.body;
@@ -205,5 +277,14 @@ const resetPasswordAPI = async (req, res) => {
     }
 }
 module.exports = {
-    getAccountAPI, logoutAPI, loginAPI, registerAPI, refreshAPI, forgotPasswordAPI, verifyOTPAPI, resetPasswordAPI
+    getAccountAPI,
+    updateAccountAPI,
+    changePasswordAPI,
+    logoutAPI,
+    loginAPI,
+    registerAPI,
+    refreshAPI,
+    forgotPasswordAPI,
+    verifyOTPAPI,
+    resetPasswordAPI
 }

@@ -2,6 +2,8 @@
 const Budget = require("../models/budget");
 const Category = require("../models/category");
 const Wallet = require("../models/wallet");
+const Transaction = require("../models/transaction");
+const mongoose = require("mongoose");
 
 const createBudget = async (userId, data) => {
   try {
@@ -99,19 +101,124 @@ const createBudget = async (userId, data) => {
   }
 };
 
+// Helper: Tính tổng chi tiêu cho một budget
+const calculateSpentAmount = async (budget) => {
+  try {
+    // Xử lý userId
+    let userIdObj;
+    if (budget.userId) {
+      userIdObj = typeof budget.userId === 'string'
+        ? new mongoose.Types.ObjectId(budget.userId)
+        : budget.userId;
+    } else {
+      console.error("Budget missing userId:", budget);
+      return 0;
+    }
+
+    // Xử lý categoryId
+    let categoryIdObj;
+    if (budget.category) {
+      if (typeof budget.category === 'object' && budget.category._id) {
+        categoryIdObj = budget.category._id;
+      } else if (typeof budget.category === 'string') {
+        categoryIdObj = new mongoose.Types.ObjectId(budget.category);
+      } else {
+        categoryIdObj = budget.category;
+      }
+    } else {
+      console.error("Budget missing category:", budget);
+      return 0;
+    }
+
+    // Xây dựng query filter
+    const matchQuery = {
+      userId: userIdObj,
+      categoryId: categoryIdObj,
+      type: "expense",
+    };
+
+    // Lọc theo wallet nếu có
+    if (budget.wallet) {
+      let walletIdObj;
+      if (typeof budget.wallet === 'object' && budget.wallet._id) {
+        walletIdObj = budget.wallet._id;
+      } else if (typeof budget.wallet === 'string') {
+        walletIdObj = new mongoose.Types.ObjectId(budget.wallet);
+      } else {
+        walletIdObj = budget.wallet;
+      }
+      matchQuery.walletId = walletIdObj;
+    }
+
+    // Lọc theo khoảng thời gian của budget
+    if (budget.start_date || budget.end_date) {
+      matchQuery.date = {};
+      if (budget.start_date) {
+        const startDate = new Date(budget.start_date);
+        startDate.setHours(0, 0, 0, 0);
+        matchQuery.date.$gte = startDate;
+      }
+      if (budget.end_date) {
+        const endDate = new Date(budget.end_date);
+        endDate.setHours(23, 59, 59, 999);
+        matchQuery.date.$lte = endDate;
+      }
+    }
+
+    // Tính tổng chi tiêu
+    const result = await Transaction.aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: null,
+          totalSpent: { $sum: "$amount" },
+        },
+      },
+    ]);
+
+    const spentAmount = result.length > 0 ? Number(result[0].totalSpent) : 0;
+
+    console.log(`📊 [calculateSpentAmount] Budget: ${budget.name || budget._id}, Spent: ${spentAmount}`, {
+      matchQuery: JSON.stringify(matchQuery, null, 2),
+      resultCount: result.length,
+    });
+
+    return spentAmount;
+  } catch (error) {
+    console.error("❌ [calculateSpentAmount] Error:", error);
+    console.error("Budget data:", JSON.stringify(budget, null, 2));
+    return 0;
+  }
+};
+
 const getAllBudgets = async (userId) => {
   try {
-    const budgets = await Budget.find({ userId })
+    const userIdObj = typeof userId === 'string'
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
+    const budgets = await Budget.find({ userId: userIdObj })
       .sort({ createdAt: -1 })
       .populate("category")
       .populate("wallet")
       .lean();
 
+    // Tính spent_amount cho mỗi budget
+    const budgetsWithSpent = await Promise.all(
+      budgets.map(async (budget) => {
+        const spentAmount = await calculateSpentAmount(budget);
+        return {
+          ...budget,
+          spent_amount: spentAmount,
+        };
+      })
+    );
+
     return {
       status: true,
       error: 0,
       message: "Fetched successfully",
-      data: budgets,
+      data: budgetsWithSpent,
     };
   } catch (error) {
     return {
@@ -125,7 +232,11 @@ const getAllBudgets = async (userId) => {
 
 const getBudgetById = async (budgetId, userId) => {
   try {
-    const budget = await Budget.findOne({ _id: budgetId, userId })
+    const userIdObj = typeof userId === 'string'
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
+    const budget = await Budget.findOne({ _id: budgetId, userId: userIdObj })
       .populate("category")
       .populate("wallet")
       .lean();
@@ -139,11 +250,17 @@ const getBudgetById = async (budgetId, userId) => {
       };
     }
 
+    // Tính spent_amount
+    const spentAmount = await calculateSpentAmount(budget);
+
     return {
       status: true,
       error: 0,
       message: "Fetched successfully",
-      data: budget,
+      data: {
+        ...budget,
+        spent_amount: spentAmount,
+      },
     };
   } catch (error) {
     return {

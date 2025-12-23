@@ -8,6 +8,8 @@ router.post('/login', authController.loginAPI);
 router.post('/refreshToken', authController.refreshAPI);
 router.post('/logout', verifyToken, authController.logoutAPI);
 router.get('/account', verifyToken, authController.getAccountAPI);
+router.put('/account', verifyToken, authController.updateAccountAPI);
+router.post('/changePassword', verifyToken, authController.changePasswordAPI);
 router.post('/forgotPassword', authController.forgotPasswordAPI);
 router.post('/verifyOTP', authController.verifyOTPAPI);
 router.post('/resetPassword', authController.resetPasswordAPI);

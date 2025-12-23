@@ -3,7 +3,7 @@ const User = require("../models/user")
 // createUser
 const createUser = async (user) => {
     try {
-        const existingUser = await User.findOne({email: user.email});
+        const existingUser = await User.findOne({ email: user.email });
         if (existingUser) {
             return {
                 status: false,
@@ -27,7 +27,7 @@ const createUser = async (user) => {
             message: "Create user successfully!",
             data: createdUser
         }
-    } catch(error) {
+    } catch (error) {
         return {
             status: false,
             error: -1,
@@ -73,11 +73,41 @@ const getUser = async () => {
 const updateUser = async (user) => {
     try {
         const { id, ...updateData } = user;
-        let data = await User.updateOne({_id: id}, updateData);
-        return data || null;
+
+        // Xóa các field không được phép update
+        delete updateData.password;
+        delete updateData.refreshToken;
+        delete updateData.email; // Email không được đổi
+
+        const updatedUser = await User.findByIdAndUpdate(
+            id,
+            { $set: updateData },
+            { new: true, runValidators: true }
+        ).select("-password -refreshToken");
+
+        if (!updatedUser) {
+            return {
+                status: false,
+                error: 1,
+                message: "User not found",
+                data: null,
+            };
+        }
+
+        return {
+            status: true,
+            error: 0,
+            message: "Updated successfully",
+            data: updatedUser,
+        };
     } catch (error) {
-        console.log(error);
-        return null;
+        console.error("Error updating user:", error);
+        return {
+            status: false,
+            error: -1,
+            message: error.message || "Error updating user",
+            data: null,
+        };
     }
 }
 
@@ -90,7 +120,7 @@ const deleteUser = async (user) => {
         const id = user._id;
         let data = await User.deleteById(id);
         return data || null;
-    } catch(error) {
+    } catch (error) {
         console.log(error);
         return null;
     }

@@ -8,7 +8,7 @@ const Wallet = require("../models/wallet");
 const getPeriodData = async (userId, startDate, endDate) => {
   // Đảm bảo userId là ObjectId
   const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
-  
+
   const matchQuery = {
     userId: userIdObj,
     date: {
@@ -42,7 +42,7 @@ const getPeriodData = async (userId, startDate, endDate) => {
   // Kiểm tra tổng số transaction trong khoảng thời gian
   const totalTransactions = await Transaction.countDocuments(matchQuery);
   console.log("📈 [getPeriodData] Total transactions found:", totalTransactions);
-  
+
   // Nếu không có transaction, kiểm tra xem có transaction nào của user này không
   if (totalTransactions === 0) {
     const userTotalTransactions = await Transaction.countDocuments({ userId: userIdObj });
@@ -112,19 +112,19 @@ const getPreviousMonthRange = () => {
 const getCurrentWeekRange = () => {
   const now = new Date();
   const day = now.getDay(); // 0 = Chủ nhật, 1 = Thứ 2, ..., 6 = Thứ 7
-  
+
   // Tính số ngày cần lùi lại để đến Thứ 2
   // Nếu Chủ nhật (0) thì lùi 6 ngày, nếu Thứ 2 (1) thì lùi 0 ngày, v.v.
   const daysToMonday = day === 0 ? 6 : day - 1;
-  
+
   const startDate = new Date(now);
   startDate.setDate(now.getDate() - daysToMonday);
   startDate.setHours(0, 0, 0, 0);
-  
+
   const endDate = new Date(startDate);
   endDate.setDate(startDate.getDate() + 6);
   endDate.setHours(23, 59, 59, 999);
-  
+
   return { startDate, endDate };
 };
 
@@ -136,11 +136,11 @@ const getPreviousWeekRange = () => {
   const endDate = new Date(currentStart);
   endDate.setDate(currentStart.getDate() - 1);
   endDate.setHours(23, 59, 59, 999);
-  
+
   const startDate = new Date(endDate);
   startDate.setDate(endDate.getDate() - 6);
   startDate.setHours(0, 0, 0, 0);
-  
+
   return { startDate, endDate };
 };
 
@@ -177,7 +177,7 @@ const getFinancialDashboard = async (userId, options = {}) => {
 
     // Xây dựng query filter cho transaction
     const matchQuery = { userId: userIdObj };
-    
+
     // Lọc theo khoảng thời gian nếu có
     if (startDate || endDate) {
       matchQuery.date = {};
@@ -229,13 +229,13 @@ const getFinancialDashboard = async (userId, options = {}) => {
     if (expenseStat) totalExpense = expenseStat.totalAmount;
 
     console.log("📊 [getFinancialDashboard] Aggregation results:", JSON.stringify(stats, null, 2));
-    
+
     // Kiểm tra tổng số transaction
     const totalTransactions = await Transaction.countDocuments(matchQuery);
     console.log("📈 [getFinancialDashboard] Total transactions found:", totalTransactions);
 
     // Tính tổng số dư tất cả ví của user (chỉ tính ví chưa bị archive và chưa xóa)
-    const wallets = await Wallet.find({ 
+    const wallets = await Wallet.find({
       userId: userIdObj,
       is_archived: false,
     }).lean();
@@ -247,12 +247,57 @@ const getFinancialDashboard = async (userId, options = {}) => {
     // Tính chênh lệch thu - chi
     const balance = totalIncome - totalExpense;
 
+    // Tính phần trăm thay đổi so với kỳ trước
+    let incomeChangePercent = 0;
+    let expenseChangePercent = 0;
+
+    // Nếu có startDate và endDate, tính kỳ trước
+    if (startDate && endDate) {
+      try {
+        const currentStartDate = new Date(startDate);
+        const currentEndDate = new Date(endDate);
+
+        // Tính số ngày của kỳ hiện tại
+        const daysDiff = Math.ceil((currentEndDate - currentStartDate) / (1000 * 60 * 60 * 24)) + 1;
+
+        // Tính ngày bắt đầu và kết thúc của kỳ trước
+        const previousEndDate = new Date(currentStartDate);
+        previousEndDate.setDate(previousEndDate.getDate() - 1);
+        previousEndDate.setHours(23, 59, 59, 999);
+
+        const previousStartDate = new Date(previousEndDate);
+        previousStartDate.setDate(previousStartDate.getDate() - daysDiff + 1);
+        previousStartDate.setHours(0, 0, 0, 0);
+
+        // Lấy dữ liệu kỳ trước
+        const previousData = await getPeriodData(userId, previousStartDate, previousEndDate);
+
+        // Tính phần trăm thay đổi
+        incomeChangePercent = calculatePercentageChange(totalIncome, previousData.totalIncome);
+        expenseChangePercent = calculatePercentageChange(totalExpense, previousData.totalExpense);
+
+        console.log("📊 [getFinancialDashboard] Previous period data:", {
+          previousStartDate: previousStartDate.toISOString(),
+          previousEndDate: previousEndDate.toISOString(),
+          previousIncome: previousData.totalIncome,
+          previousExpense: previousData.totalExpense,
+          incomeChangePercent,
+          expenseChangePercent,
+        });
+      } catch (prevError) {
+        console.error("⚠️ [getFinancialDashboard] Error calculating previous period:", prevError);
+        // Nếu có lỗi, giữ giá trị mặc định là 0
+      }
+    }
+
     console.log("✅ [getFinancialDashboard] Final results:", {
       totalIncome,
       totalExpense,
       totalWalletBalance,
       balance,
       walletCount: wallets.length,
+      incomeChangePercent,
+      expenseChangePercent,
     });
 
     // Kết quả trả về
@@ -262,6 +307,8 @@ const getFinancialDashboard = async (userId, options = {}) => {
       totalWalletBalance,
       balance, // Chênh lệch thu - chi
       walletCount: wallets.length,
+      incomeChange: parseFloat(incomeChangePercent.toFixed(2)), // Làm tròn đến 2 chữ số thập phân
+      expenseChange: parseFloat(expenseChangePercent.toFixed(2)), // Làm tròn đến 2 chữ số thập phân
       period: {
         startDate: startDate || null,
         endDate: endDate || null,
@@ -475,7 +522,7 @@ const getWalletChanges = async (userId, options = {}) => {
   try {
     const { startDate, endDate } = options;
     const now = new Date();
-    
+
     // Nếu không có ngày, lấy tháng hiện tại
     let periodStart, periodEnd;
     if (startDate && endDate) {
@@ -538,7 +585,7 @@ const getWalletChanges = async (userId, options = {}) => {
         const estimatedStartBalance = currentBalance - periodNetChange;
 
         const change = currentBalance - estimatedStartBalance;
-        const changePercent = estimatedStartBalance === 0 
+        const changePercent = estimatedStartBalance === 0
           ? (currentBalance > 0 ? 100 : 0)
           : (change / estimatedStartBalance) * 100;
 
@@ -588,7 +635,7 @@ const getWalletChanges = async (userId, options = {}) => {
 const getTimeBasedReportByDay = async (userId, options = {}) => {
   try {
     const { startDate, endDate, type, walletId, categoryId } = options;
-    
+
     if (!startDate || !endDate) {
       return {
         status: false,
@@ -604,7 +651,7 @@ const getTimeBasedReportByDay = async (userId, options = {}) => {
     // Set thời gian đầu ngày và cuối ngày
     const startDateObj = new Date(startDate);
     startDateObj.setHours(0, 0, 0, 0);
-    
+
     const endDateObj = new Date(endDate);
     endDateObj.setHours(23, 59, 59, 999);
 
@@ -670,7 +717,7 @@ const getTimeBasedReportByDay = async (userId, options = {}) => {
 const getTimeBasedReportByWeek = async (userId, options = {}) => {
   try {
     const { startDate, endDate, type, walletId, categoryId } = options;
-    
+
     if (!startDate || !endDate) {
       return {
         status: false,
@@ -686,7 +733,7 @@ const getTimeBasedReportByWeek = async (userId, options = {}) => {
     // Set thời gian cuối ngày để lấy hết dữ liệu trong ngày cuối
     const startDateObj = new Date(startDate);
     startDateObj.setHours(0, 0, 0, 0);
-    
+
     const endDateObj = new Date(endDate);
     endDateObj.setHours(23, 59, 59, 999);
 
@@ -736,29 +783,29 @@ const getTimeBasedReportByWeek = async (userId, options = {}) => {
       // MongoDB $week sử dụng ISO week numbering
       // Tuần đầu tiên của năm là tuần có ngày 4 tháng 1
       // Tuần bắt đầu từ Thứ 2
-      
+
       // Tìm ngày 4 tháng 1 của năm (điểm tham chiếu cho tuần đầu tiên)
       const jan4 = new Date(year, 0, 4);
-      
+
       // Tìm thứ của ngày 4/1 (0 = Chủ nhật, 1 = Thứ 2, ..., 6 = Thứ 7)
       const dayOfWeek = jan4.getDay();
-      
+
       // Tính số ngày cần trừ để đến Thứ 2 của tuần chứa ngày 4/1
       // ISO week: Thứ 2 = 1, Thứ 3 = 2, ..., Chủ nhật = 0 (nhưng tính là 7)
       const daysToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
-      
+
       // Tính ngày Thứ 2 của tuần đầu tiên (tuần chứa ngày 4/1)
       const firstMonday = new Date(jan4);
       firstMonday.setDate(jan4.getDate() + daysToMonday);
-      
+
       // Tính ngày đầu tuần của tuần cần tìm (cộng (week - 1) * 7 ngày)
       const weekStart = new Date(firstMonday);
       weekStart.setDate(firstMonday.getDate() + (week - 1) * 7);
-      
+
       // Tính ngày cuối tuần (Chủ nhật = Thứ 2 + 6 ngày)
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
-      
+
       return { weekStart, weekEnd };
     };
 
@@ -773,7 +820,7 @@ const getTimeBasedReportByWeek = async (userId, options = {}) => {
       const { weekStart, weekEnd } = getWeekDateRange(item._id.year, item._id.week);
       const startDateStr = formatDate(weekStart);
       const endDateStr = formatDate(weekEnd);
-      
+
       return {
         year: item._id.year,
         week: item._id.week,
@@ -810,7 +857,7 @@ const getTimeBasedReportByWeek = async (userId, options = {}) => {
 const getTimeBasedReportByMonth = async (userId, options = {}) => {
   try {
     const { startDate, endDate, type, walletId, categoryId } = options;
-    
+
     if (!startDate || !endDate) {
       return {
         status: false,
@@ -826,7 +873,7 @@ const getTimeBasedReportByMonth = async (userId, options = {}) => {
     // Set thời gian cuối ngày để lấy hết dữ liệu trong ngày cuối
     const startDateObj = new Date(startDate);
     startDateObj.setHours(0, 0, 0, 0);
-    
+
     const endDateObj = new Date(endDate);
     endDateObj.setHours(23, 59, 59, 999);
 
@@ -864,7 +911,7 @@ const getTimeBasedReportByMonth = async (userId, options = {}) => {
       const userTotalTransactions = await Transaction.countDocuments({ userId: userIdObj });
       console.log("⚠️ [getTimeBasedReportByMonth] WARNING: No transactions in this period!");
       console.log("   But user has total transactions:", userTotalTransactions);
-      
+
       if (userTotalTransactions > 0) {
         // Lấy một transaction mẫu để xem date format
         const sampleTransaction = await Transaction.findOne({ userId: userIdObj }).lean();
@@ -932,7 +979,7 @@ const getTimeBasedReportByMonth = async (userId, options = {}) => {
 const getTimeBasedReportByYear = async (userId, options = {}) => {
   try {
     const { startDate, endDate, type, walletId, categoryId } = options;
-    
+
     if (!startDate || !endDate) {
       return {
         status: false,
@@ -948,7 +995,7 @@ const getTimeBasedReportByYear = async (userId, options = {}) => {
     // Set thời gian cuối ngày để lấy hết dữ liệu trong ngày cuối
     const startDateObj = new Date(startDate);
     startDateObj.setHours(0, 0, 0, 0);
-    
+
     const endDateObj = new Date(endDate);
     endDateObj.setHours(23, 59, 59, 999);
 
@@ -986,7 +1033,7 @@ const getTimeBasedReportByYear = async (userId, options = {}) => {
       const userTotalTransactions = await Transaction.countDocuments({ userId: userIdObj });
       console.log("⚠️ [getTimeBasedReportByYear] WARNING: No transactions in this period!");
       console.log("   But user has total transactions:", userTotalTransactions);
-      
+
       if (userTotalTransactions > 0) {
         // Lấy một transaction mẫu để xem date format
         const sampleTransaction = await Transaction.findOne({ userId: userIdObj }).lean();
@@ -1433,27 +1480,27 @@ const getWalletExpenseReport = async (userId, options = {}) => {
 
     // Kiểm tra tổng số ví của user (để debug)
     // Sử dụng withDeleted() để đếm cả ví đã xóa (nếu cần)
-    const totalWallets = await Wallet.countDocuments({ 
+    const totalWallets = await Wallet.countDocuments({
       userId: userIdObj,
       deleted: { $ne: true },
     });
-    const activeWallets = await Wallet.countDocuments({ 
+    const activeWallets = await Wallet.countDocuments({
       userId: userIdObj,
       deleted: { $ne: true },
       is_archived: { $ne: true },
     });
-    const archivedWallets = await Wallet.countDocuments({ 
+    const archivedWallets = await Wallet.countDocuments({
       userId: userIdObj,
       deleted: { $ne: true },
       is_archived: true,
     });
 
     // Log chi tiết từng ví để debug
-    const allWallets = await Wallet.find({ 
+    const allWallets = await Wallet.find({
       userId: userIdObj,
       deleted: { $ne: true },
     }).lean();
-    
+
     console.log("📊 [getWalletExpenseReport] Query params:", {
       userId: userIdObj.toString(),
       startDate: startDate ? new Date(startDate).toISOString() : null,
@@ -1562,7 +1609,7 @@ const compareWalletExpenseOverTime = async (userId, options = {}) => {
     // Set thời gian đầu ngày và cuối ngày
     const startDateObj = new Date(startDate);
     startDateObj.setHours(0, 0, 0, 0);
-    
+
     const endDateObj = new Date(endDate);
     endDateObj.setHours(23, 59, 59, 999);
 

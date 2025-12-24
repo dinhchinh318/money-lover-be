@@ -129,6 +129,78 @@ const getAccountAPI = async (req, res) => {
         });
     }
 }
+
+const updateAccountAPI = async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+        const userService = require("../services/userService");
+        const updateData = {
+            id: userId,
+            ...req.body,
+        };
+
+        const result = await userService.updateUser(updateData);
+
+        if (result && result.status) {
+            return res.status(200).json({
+                EC: 0,
+                message: result.message || "Updated successfully",
+                data: result.data,
+            });
+        }
+
+        return res.status(200).json({
+            EC: result?.error || -1,
+            message: result?.message || "Update failed",
+            data: null,
+        });
+    } catch (error) {
+        console.error("Error updating account:", error);
+        return res.status(500).json({
+            EC: -1,
+            message: error.message || "Server error",
+            data: null,
+        });
+    }
+}
+
+const changePasswordAPI = async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+        const { currentPassword, newPassword } = req.body;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({
+                EC: 1,
+                message: "Vui lòng nhập đầy đủ mật khẩu",
+                data: null,
+            });
+        }
+
+        const result = await authService.changePassword(userId, currentPassword, newPassword);
+
+        if (result && result.status) {
+            return res.status(200).json({
+                EC: 0,
+                message: result.message || "Changed password successfully",
+                data: result.data,
+            });
+        }
+
+        return res.status(200).json({
+            EC: result?.error || -1,
+            message: result?.message || "Change password failed",
+            data: null,
+        });
+    } catch (error) {
+        console.error("Error changing password:", error);
+        return res.status(500).json({
+            EC: -1,
+            message: error.message || "Server error",
+            data: null,
+        });
+    }
+}
 const forgotPasswordAPI = async (req, res) => {
     try {
         const { email } = req.body;
@@ -204,6 +276,57 @@ const resetPasswordAPI = async (req, res) => {
         )
     }
 }
+const googleLoginAPI = async (req, res) => {
+    try {
+        // Lấy thông tin từ Google token (đã được verify ở middleware)
+        const googleUser = req.googleUser;
+
+        const googleProfile = {
+            id: googleUser.id,
+            emails: [{ value: googleUser.email }],
+            displayName: googleUser.name,
+            photos: [{ value: googleUser.picture }],
+        };
+
+        const data = await authService.loginWithGoogle(googleProfile);
+
+        if (data.error === 0) {
+            res.cookie("refreshToken", data.refreshToken, {
+                httpOnly: true,
+                secure: false,
+                path: "/",
+                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            });
+
+            const { refreshToken, ...responseData } = data;
+            return res.status(200).json({
+                ...responseData,
+                data: responseData.data,
+            });
+        }
+
+        return res.status(200).json(data);
+    } catch (error) {
+        console.error("Google login API error:", error);
+        return res.status(500).json({
+            status: false,
+            error: -1,
+            message: "Lỗi server khi đăng nhập bằng Google",
+            data: null,
+        });
+    }
+};
+
 module.exports = {
-    getAccountAPI, logoutAPI, loginAPI, registerAPI, refreshAPI, forgotPasswordAPI, verifyOTPAPI, resetPasswordAPI
+    getAccountAPI,
+    updateAccountAPI,
+    changePasswordAPI,
+    logoutAPI,
+    loginAPI,
+    registerAPI,
+    refreshAPI,
+    forgotPasswordAPI,
+    verifyOTPAPI,
+    resetPasswordAPI,
+    googleLoginAPI,
 }

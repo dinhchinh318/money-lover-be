@@ -276,6 +276,47 @@ const resetPasswordAPI = async (req, res) => {
         )
     }
 }
+const googleLoginAPI = async (req, res) => {
+    try {
+        // Lấy thông tin từ Google token (đã được verify ở middleware)
+        const googleUser = req.googleUser;
+
+        const googleProfile = {
+            id: googleUser.id,
+            emails: [{ value: googleUser.email }],
+            displayName: googleUser.name,
+            photos: [{ value: googleUser.picture }],
+        };
+
+        const data = await authService.loginWithGoogle(googleProfile);
+
+        if (data.error === 0) {
+            res.cookie("refreshToken", data.refreshToken, {
+                httpOnly: true,
+                secure: false,
+                path: "/",
+                maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+            });
+
+            const { refreshToken, ...responseData } = data;
+            return res.status(200).json({
+                ...responseData,
+                data: responseData.data,
+            });
+        }
+
+        return res.status(200).json(data);
+    } catch (error) {
+        console.error("Google login API error:", error);
+        return res.status(500).json({
+            status: false,
+            error: -1,
+            message: "Lỗi server khi đăng nhập bằng Google",
+            data: null,
+        });
+    }
+};
+
 module.exports = {
     getAccountAPI,
     updateAccountAPI,
@@ -286,5 +327,6 @@ module.exports = {
     refreshAPI,
     forgotPasswordAPI,
     verifyOTPAPI,
-    resetPasswordAPI
+    resetPasswordAPI,
+    googleLoginAPI,
 }

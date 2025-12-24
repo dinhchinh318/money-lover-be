@@ -1623,11 +1623,17 @@ const suggestOptimizeSpending = async (userId, options = {}) => {
     const startDate = new Date(now);
     startDate.setDate(now.getDate() - days);
 
+    // Đảm bảo userId là ObjectId
+    const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+
+    console.log(`[suggestOptimizeSpending] userId: ${userId} (${typeof userId}), userIdObj: ${userIdObj}, days: ${days}, thresholdPercent: ${thresholdPercent}`);
+    console.log(`[suggestOptimizeSpending] Date range: ${startDate.toISOString()} to ${now.toISOString()}`);
+
     // Lấy chi tiêu theo danh mục trong khoảng thời gian
     const categoryStats = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: userIdObj,
           type: "expense",
           date: { $gte: startDate, $lte: now },
         },
@@ -1661,25 +1667,71 @@ const suggestOptimizeSpending = async (userId, options = {}) => {
       { $sort: { totalAmount: -1 } },
     ]);
 
+    console.log(`[suggestOptimizeSpending] Found ${categoryStats.length} categories with expenses`);
+    if (categoryStats.length > 0) {
+      console.log(`[suggestOptimizeSpending] Category stats:`, categoryStats.map(c => ({
+        name: c.categoryName,
+        totalAmount: c.totalAmount,
+        count: c.count
+      })));
+    }
+
     if (categoryStats.length === 0) {
       return {
         status: true,
         error: 0,
         message: "Không có dữ liệu để phân tích",
-        data: { suggestions: [] },
+        data: {
+          suggestions: [],
+          totalExpense: 0,
+          potentialTotalSavings: 0,
+        },
       };
     }
 
     // Tính tổng chi tiêu
     const totalExpense = categoryStats.reduce((sum, cat) => sum + cat.totalAmount, 0);
 
+    if (totalExpense === 0) {
+      console.log(`[suggestOptimizeSpending] Total expense is 0, no suggestions`);
+      return {
+        status: true,
+        error: 0,
+        message: "Không có chi tiêu để phân tích",
+        data: {
+          suggestions: [],
+          totalExpense: 0,
+          potentialTotalSavings: 0,
+        },
+      };
+    }
+
     // Phân tích chi tiết và tính toán gợi ý tối ưu thông minh
-    const suggestions = categoryStats
-      .filter((cat) => {
-        const percentage = (cat.totalAmount / totalExpense) * 100;
-        return percentage >= thresholdPercent;
-      })
-      .map((cat) => {
+    // Giảm threshold xuống 10% để có nhiều suggestions hơn (thay vì 15% hoặc 20%)
+    // Nếu chỉ có 1-2 categories thì lấy tất cả, nếu có nhiều thì lấy top categories
+    let effectiveThreshold = 10; // Mặc định 10%
+    if (categoryStats.length <= 2) {
+      // Nếu chỉ có 1-2 categories, lấy tất cả
+      effectiveThreshold = 0;
+    } else if (categoryStats.length <= 5) {
+      // Nếu có 3-5 categories, lấy top 50%
+      effectiveThreshold = 10;
+    } else {
+      // Nếu có nhiều categories, dùng thresholdPercent
+      effectiveThreshold = Math.min(thresholdPercent, 15);
+    }
+
+    const filteredCategories = categoryStats.filter((cat) => {
+      const percentage = (cat.totalAmount / totalExpense) * 100;
+      return percentage >= effectiveThreshold;
+    });
+
+    console.log(`[suggestOptimizeSpending] Total expense: ${totalExpense}, Threshold: ${effectiveThreshold}%`);
+    console.log(`[suggestOptimizeSpending] Filtered ${filteredCategories.length} categories (from ${categoryStats.length})`);
+
+    // Tính toán suggestions với async operations
+    const suggestions = await Promise.all(
+      filteredCategories.map(async (cat) => {
         const percentage = (cat.totalAmount / totalExpense) * 100;
 
         // Tính toán % giảm đề xuất dựa trên phân tích
@@ -1698,9 +1750,20 @@ const suggestOptimizeSpending = async (userId, options = {}) => {
 
         // Tính độ biến thiên để đánh giá khả năng tiết kiệm
         // Lấy lịch sử chi tiêu của category này để phân tích
+        const categoryTransactions = await Transaction.find({
+          userId: userIdObj,
+          categoryId: cat.categoryId,
+          type: "expense",
+          date: { $gte: startDate, $lte: now },
+        }).lean();
+
+        const amounts = categoryTransactions.map((t) => t.amount);
         const mean = cat.avgAmount;
-        const stdDev = calculateStdDev([cat.totalAmount], mean);
-        const zScore = calculateZScore(cat.totalAmount, mean, stdDev);
+        const stdDev = amounts.length > 1 ? calculateStdDev(amounts, mean) : 0;
+        const zScore = stdDev > 0 ? calculateZScore(cat.totalAmount, mean, stdDev) : 0;
+//         const stdDev = calculateStdDev([cat.totalAmount], mean);
+//         const zScore = calculateZScore(cat.totalAmount, mean, stdDev);
+
 
         // Nếu có biến thiên lớn (outlier) → có thể tiết kiệm nhiều hơn
         const adjustmentFactor = Math.abs(zScore) > 1.5 ? 1.2 : 1.0;
@@ -1739,7 +1802,8 @@ const suggestOptimizeSpending = async (userId, options = {}) => {
           },
           priority: priority,
         };
-      });
+      })
+    );
 
     return {
       status: true,
@@ -1769,18 +1833,26 @@ const suggestOptimizeSpending = async (userId, options = {}) => {
  */
 const suggestBudgetAdjustment = async (userId) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+
     const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const last3MonthsStart = new Date(now);
     last3MonthsStart.setMonth(now.getMonth() - 3);
 
+    console.log(`[suggestBudgetAdjustment] userId: ${userId} (${typeof userId}), userIdObj: ${userIdObj}`);
+    console.log(`[suggestBudgetAdjustment] Date range: ${last3MonthsStart.toISOString()} to ${now.toISOString()}`);
+
     // Lấy tất cả budgets
     const budgets = await Budget.find({
-      userId,
+      userId: userIdObj,
       period: "monthly",
     })
       .populate("category", "name icon")
       .lean();
+
+    console.log(`[suggestBudgetAdjustment] Found ${budgets.length} monthly budgets`);
 
     const suggestions = [];
 
@@ -1789,7 +1861,7 @@ const suggestBudgetAdjustment = async (userId) => {
       const avgSpendingStats = await Transaction.aggregate([
         {
           $match: {
-            userId,
+            userId: userIdObj,
             type: "expense",
             categoryId: budget.category._id,
             date: { $gte: last3MonthsStart, $lte: now },
@@ -1890,8 +1962,12 @@ const suggestBudgetAdjustment = async (userId) => {
           },
           priority: overrunRate >= 50 ? "high" : avgMonthlySpending > currentLimit ? "medium" : "low",
         });
+      } else {
+        console.log(`[suggestBudgetAdjustment] Budget ${budget._id} (${budget.category?.name}): No transactions in last 3 months`);
       }
     }
+
+    console.log(`[suggestBudgetAdjustment] Generated ${suggestions.length} budget adjustment suggestions`);
 
     return {
       status: true,
@@ -1917,12 +1993,33 @@ const suggestBudgetAdjustment = async (userId) => {
 const suggestWalletTransfer = async (userId) => {
   try {
     const wallets = await Wallet.find({ userId, is_archived: false }).lean();
+    console.log(`[suggestWalletTransfer] Found ${wallets.length} wallets for user ${userId}`);
+
     const suggestions = [];
     const lowBalanceWallets = [];
     const highBalanceWallets = [];
 
     // Phân loại ví: sắp âm (<10% số dư ban đầu hoặc < threshold)
     const threshold = 100000; // 100k VND
+    const highBalanceThreshold = 200000; // 200k VND (giảm từ 300k để dễ có suggestions hơn)
+
+    // Nếu chỉ có 1 ví thì không có transfer suggestions
+    if (wallets.length < 2) {
+      console.log(`[suggestWalletTransfer] Only ${wallets.length} wallet(s), cannot suggest transfers`);
+      return {
+        status: true,
+        error: 0,
+        message: "Cần ít nhất 2 ví để có khuyến nghị chuyển tiền",
+        data: {
+          suggestions: [],
+          summary: {
+            lowBalanceCount: 0,
+            highBalanceCount: 0,
+            totalSuggestions: 0,
+          },
+        },
+      };
+    }
 
     for (const wallet of wallets) {
       if (wallet.balance < threshold || wallet.balance < 0) {
@@ -1933,8 +2030,8 @@ const suggestWalletTransfer = async (userId) => {
           currentBalance: wallet.balance,
           isLow: true,
         });
-      } else if (wallet.balance > threshold * 5) {
-        // Ví có số dư cao (>500k)
+      } else if (wallet.balance > highBalanceThreshold) {
+        // Ví có số dư cao (>200k)
         highBalanceWallets.push({
           walletId: wallet._id,
           walletName: wallet.name,
@@ -1942,6 +2039,15 @@ const suggestWalletTransfer = async (userId) => {
           currentBalance: wallet.balance,
         });
       }
+    }
+
+    console.log(`[suggestWalletTransfer] Low balance wallets: ${lowBalanceWallets.length}, High balance wallets: ${highBalanceWallets.length}`);
+    if (wallets.length > 0) {
+      console.log(`[suggestWalletTransfer] Wallet balances:`, wallets.map(w => ({
+        name: w.name,
+        balance: w.balance,
+        type: w.type
+      })));
     }
 
     // Thuật toán tối ưu chuyển tiền: Greedy Algorithm
@@ -1966,15 +2072,15 @@ const suggestWalletTransfer = async (userId) => {
         if (usedHighWallets.has(highWallet.walletId.toString())) continue;
 
         // Tính số tiền có thể chuyển
-        // Không chuyển quá 30% từ ví dư, và đảm bảo ví dư còn ít nhất 100k
+        // Không chuyển quá 50% từ ví dư (tăng từ 30% để có suggestions dễ hơn), và đảm bảo ví dư còn ít nhất 100k
         const maxFromHigh = Math.min(
-          highWallet.currentBalance * 0.3,
+          highWallet.currentBalance * 0.5,
           highWallet.currentBalance - threshold
         );
 
         if (maxFromHigh < threshold) continue;
 
-        // Số tiền đề xuất: đủ để ví thiếu có 200k, nhưng không quá 30% ví dư
+        // Số tiền đề xuất: đủ để ví thiếu có 200k, nhưng không quá 50% ví dư
         const suggestedAmount = Math.min(neededAmount, maxFromHigh);
 
         if (suggestedAmount >= threshold) {
@@ -2019,6 +2125,51 @@ const suggestWalletTransfer = async (userId) => {
         }
       }
     });
+
+    // Nếu không có low balance wallets nhưng có high balance wallets, vẫn có thể suggest cân đối
+    if (lowBalanceWallets.length === 0 && highBalanceWallets.length > 0 && wallets.length > 1) {
+      // Tìm ví có balance thấp nhất (nhưng không phải low balance) để suggest cân đối
+      const otherWallets = wallets.filter(w =>
+        w.balance >= threshold &&
+        w.balance <= highBalanceThreshold &&
+        !highBalanceWallets.find(h => h.walletId.toString() === w._id.toString())
+      );
+
+      if (otherWallets.length > 0) {
+        const lowestWallet = otherWallets.reduce((min, w) => w.balance < min.balance ? w : min);
+        const highestWallet = highBalanceWallets[0]; // Đã sort ở trên
+
+        const balanceDiff = highestWallet.currentBalance - lowestWallet.balance;
+        if (balanceDiff > threshold * 2) {
+          const suggestedAmount = Math.min(balanceDiff * 0.3, highestWallet.currentBalance * 0.3);
+          suggestions.push({
+            fromWallet: {
+              id: highestWallet.walletId,
+              name: highestWallet.walletName,
+              type: highestWallet.walletType,
+              currentBalance: highestWallet.currentBalance,
+            },
+            toWallet: {
+              id: lowestWallet._id,
+              name: lowestWallet.name,
+              type: lowestWallet.type,
+              currentBalance: lowestWallet.balance,
+              isLow: false,
+            },
+            suggestedAmount: Math.round(suggestedAmount),
+            reason: "Cân đối số dư giữa các ví",
+            priority: "low",
+            optimization: {
+              neededAmount: suggestedAmount,
+              availableFromHigh: suggestedAmount,
+              transferEfficiency: 100,
+            },
+          });
+        }
+      }
+    }
+
+    console.log(`[suggestWalletTransfer] Generated ${suggestions.length} transfer suggestions`);
 
     return {
       status: true,
@@ -2127,21 +2278,86 @@ const createSmartAlerts = async (userId) => {
       });
     }
 
-    // 3. Kiểm tra vượt ngân sách
-    const budgetOverrun = await predictBudgetOverrun(userId);
-    if (budgetOverrun.status && budgetOverrun.data.atRisk.length > 0) {
-      budgetOverrun.data.atRisk.slice(0, 3).forEach((budget) => {
+    // 3. Kiểm tra ngân sách sắp hết (75% trở lên) và vượt ngân sách
+    const budgets = await Budget.find({ userId, period: "monthly" })
+      .populate("category", "name icon")
+      .lean();
+
+    for (const budget of budgets) {
+      // Tính chi tiêu hiện tại trong tháng của category này
+      const categoryExpense = await Transaction.aggregate([
+        {
+          $match: {
+            userId,
+            categoryId: budget.category._id || budget.category,
+            type: "expense",
+            date: { $gte: currentMonthStart, $lte: now },
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalAmount: { $sum: "$amount" },
+          },
+        },
+      ]);
+
+      const currentSpending = categoryExpense[0]?.totalAmount || 0;
+      const usagePercent = (currentSpending / budget.limit_amount) * 100;
+
+      // Cảnh báo khi sắp hết (75% trở lên)
+      if (usagePercent >= 75 && usagePercent < 100) {
         alerts.push({
           userId,
-          type: "BUDGET_OVERRUN_PREDICTED",
-          title: `Ngân sách "${budget.category.name}" sắp vượt`,
-          message: `Ngân sách "${budget.category.name}" đã sử dụng ${budget.usagePercent.toFixed(1)}%. Dự kiến sẽ vượt ${budget.prediction.overrunPercent.toFixed(1)}% cuối tháng.`,
+          type: "BUDGET_ALMOST_DEPLETED",
+          title: `Ngân sách "${budget.category.name}" sắp hết`,
+          message: `Bạn đã chi tiêu ${usagePercent.toFixed(1)}% ngân sách ${budget.category.name} trong tháng này (${currentSpending.toLocaleString("vi-VN")} / ${budget.limit_amount.toLocaleString("vi-VN")} VND).`,
           isRead: false,
           related: {
             model: "Budget",
-            id: budget.budgetId,
+            id: budget._id,
           },
         });
+      }
+
+      // Cảnh báo khi đã vượt ngân sách
+      if (usagePercent >= 100) {
+        alerts.push({
+          userId,
+          type: "BUDGET_OVERRUN",
+          title: `Ngân sách "${budget.category.name}" đã vượt`,
+          message: `Ngân sách "${budget.category.name}" đã vượt ${(usagePercent - 100).toFixed(1)}% (${currentSpending.toLocaleString("vi-VN")} / ${budget.limit_amount.toLocaleString("vi-VN")} VND).`,
+          isRead: false,
+          related: {
+            model: "Budget",
+            id: budget._id,
+          },
+        });
+      }
+    }
+
+    // Kiểm tra dự đoán vượt ngân sách (từ predictive analytics)
+    const budgetOverrun = await predictBudgetOverrun(userId);
+    if (budgetOverrun.status && budgetOverrun.data.atRisk.length > 0) {
+      budgetOverrun.data.atRisk.slice(0, 3).forEach((budget) => {
+        // Chỉ thêm nếu chưa có cảnh báo cho budget này
+        const existingAlert = alerts.find(
+          a => a.related?.model === "Budget" &&
+            a.related?.id?.toString() === budget.budgetId?.toString()
+        );
+        if (!existingAlert) {
+          alerts.push({
+            userId,
+            type: "BUDGET_OVERRUN_PREDICTED",
+            title: `Ngân sách "${budget.category.name}" sắp vượt`,
+            message: `Ngân sách "${budget.category.name}" đã sử dụng ${budget.usagePercent.toFixed(1)}%. Dự kiến sẽ vượt ${budget.prediction.overrunPercent.toFixed(1)}% cuối tháng.`,
+            isRead: false,
+            related: {
+              model: "Budget",
+              id: budget.budgetId,
+            },
+          });
+        }
       });
     }
 

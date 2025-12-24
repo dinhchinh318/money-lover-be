@@ -3,7 +3,7 @@ const mongoose_delete = require("mongoose-delete");
 const bcrypt = require("bcrypt");
 
 // Define user schema
-const userSchema = new mongoose.Schema (
+const userSchema = new mongoose.Schema(
     {
         name:
         {
@@ -20,7 +20,18 @@ const userSchema = new mongoose.Schema (
         password:
         {
             type: String,
-            required: true,
+            required: function () {
+                return !this.provider || this.provider === 'local';
+            },
+        },
+        provider: {
+            type: String,
+            enum: ['local', 'google', 'facebook'],
+            default: 'local',
+        },
+        providerId: {
+            type: String,
+            default: null,
         },
         phone: String,
         role:
@@ -50,8 +61,13 @@ const userSchema = new mongoose.Schema (
 
 // Middleware "pre-save": Autosave Password before save
 userSchema.pre("save", async function (next) {
-    // If password not changed -> continue
-    if (!this.isModified("password")) {
+    // If password not changed or user is OAuth user -> continue
+    if (!this.isModified("password") || (this.provider && this.provider !== 'local')) {
+        return next();
+    }
+
+    // Only hash password if it exists and user is local
+    if (!this.password) {
         return next();
     }
 
@@ -68,11 +84,14 @@ userSchema.pre("save", async function (next) {
 
 // Add check-password method
 userSchema.methods.isPasswordMatch = async function (enteredPassword) {
+    if (!this.password) {
+        return false;
+    }
     return await bcrypt.compare(enteredPassword, this.password);
 };
 
 // Add plugin mongoose-delete
-userSchema.plugin(mongoose_delete, { overrideMethods: "all"});
+userSchema.plugin(mongoose_delete, { overrideMethods: "all" });
 
 // Create model from schema
 const User = mongoose.model("User", userSchema);

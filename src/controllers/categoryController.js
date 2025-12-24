@@ -2,7 +2,7 @@ const { createCategory, getAllCategories, getCategoryById, updateCategory, delet
 
 const createCategoryAPI = async (req, res) => {
   let category = await createCategory(req.user.id, req.body.data);
-  if (category && category.status !== false) {
+  if (category && category.status !== false){
     return res.status(201).json({
       EC: 0,
       message: category.message || "Created successfully",
@@ -18,7 +18,7 @@ const createCategoryAPI = async (req, res) => {
 
 const getAllCategoriesAPI = async (req, res) => {
   let categories = await getAllCategories(req.user.id);
-  if (categories && categories.status !== false) {
+  if (categories && categories.status !== false){
     return res.status(200).json({
       EC: 0,
       data: categories.data || categories,
@@ -33,7 +33,7 @@ const getAllCategoriesAPI = async (req, res) => {
 
 const getCategoryByIdAPI = async (req, res) => {
   let category = await getCategoryById(req.params.id, req.user.id);
-  if (category && category.status !== false) {
+  if (category && category.status !== false){
     return res.status(200).json({
       EC: 0,
       data: category.data || category,
@@ -48,7 +48,7 @@ const getCategoryByIdAPI = async (req, res) => {
 
 const updateCategoryAPI = async (req, res) => {
   let category = await updateCategory(req.params.id, req.user.id, req.body.data);
-  if (category && category.status !== false) {
+  if (category && category.status !== false){
     return res.status(200).json({
       EC: 0,
       message: category.message || "Updated successfully",

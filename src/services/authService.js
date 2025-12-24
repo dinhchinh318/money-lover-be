@@ -358,6 +358,92 @@ const changePassword = async (userId, currentPassword, newPassword) => {
     }
 };
 
+const loginWithGoogle = async (googleProfile) => {
+    try {
+        const { id: googleId, emails, displayName, photos } = googleProfile;
+        const email = emails && emails[0] ? emails[0].value : null;
+        const name = displayName || 'User';
+        const avatar = photos && photos[0] ? photos[0].value : null;
+
+        if (!email) {
+            return {
+                status: false,
+                error: 1,
+                message: "Không thể lấy email từ tài khoản Google",
+                data: null,
+            };
+        }
+
+        // Tìm user theo email hoặc providerId
+        let user = await User.findOne({
+            $or: [
+                { email: email },
+                { providerId: googleId, provider: 'google' }
+            ]
+        });
+
+        if (user) {
+            // Nếu user tồn tại nhưng chưa có providerId, cập nhật
+            if (user.provider !== 'google' || !user.providerId) {
+                user.provider = 'google';
+                user.providerId = googleId;
+                if (avatar && !user.avatar) {
+                    user.avatar = avatar;
+                }
+                await user.save();
+            }
+        } else {
+            // Tạo user mới
+            const defaultAvatar = avatar || "https://res.cloudinary.com/dijy8yams/image/upload/v1742894461/avatars/lgitn3wbciwcm515y0cb.jpg";
+            user = new User({
+                name,
+                email,
+                avatar: defaultAvatar,
+                provider: 'google',
+                providerId: googleId,
+                password: null, // OAuth users không cần password
+                isActive: true,
+            });
+            await user.save();
+        }
+
+        // Tạo tokens
+        const accessToken = generateToken(user._id);
+        const refreshToken = generateRefreshToken(user._id);
+        user.refreshToken = refreshToken;
+        await user.save();
+
+        const userObj = user.toObject();
+        delete userObj.password;
+        delete userObj.refreshToken;
+
+        return {
+            status: true,
+            error: 0,
+            message: "Đăng nhập bằng Google thành công!",
+            data: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                avatar: user.avatar,
+                role: user.role,
+                phone: user.phone,
+                address: user.address,
+            },
+            accessToken,
+            refreshToken,
+        };
+    } catch (error) {
+        console.error("Google login error:", error);
+        return {
+            status: false,
+            error: -1,
+            message: error.message || "Lỗi đăng nhập bằng Google",
+            data: null,
+        };
+    }
+};
+
 module.exports = {
-    getAccount, login, logout, register, refreshAccessToken, forgotPassword, verifyOTP, resetPassword, changePassword
+    getAccount, login, logout, register, refreshAccessToken, forgotPassword, verifyOTP, resetPassword, changePassword, loginWithGoogle
 }

@@ -15,4 +15,3 @@ router.post("/:id/withdraw", verifyToken, savingGoalController.withdrawAmountAPI
 module.exports = router;
 
 
-

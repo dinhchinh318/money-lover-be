@@ -1,4 +1,4 @@
-const { createCategory, getAllCategories, getCategoryById, updateCategory, deleteCategory } = require("../services/categoryService");
+const { createCategory, getAllCategories, getCategoryById, updateCategory, deleteCategory, setDefaultCategory } = require("../services/categoryService");
 
 const createCategoryAPI = async (req, res) => {
   let category = await createCategory(req.user.id, req.body.data);
@@ -64,7 +64,7 @@ const updateCategoryAPI = async (req, res) => {
 
 const deleteCategoryAPI = async (req, res) => {
   let category = await deleteCategory(req.params.id, req.user.id);
-  if (category && category.status !== false){
+  if (category && category.status !== false) {
     return res.status(200).json({
       EC: 0,
       message: category.message || "Deleted successfully",
@@ -78,6 +78,27 @@ const deleteCategoryAPI = async (req, res) => {
   })
 }
 
+const setDefaultCategoryAPI = async (req, res) => {
+  const result = await setDefaultCategory(req.params.id, req.user.id);
+  if (result && result.status !== false) {
+    return res.status(200).json({
+      EC: 0,
+      message: result.message || "Set default successfully",
+      data: result.data,
+    });
+  }
+  return res.status(200).json({
+    EC: result?.error || -1,
+    message: result?.message || "Set default failed",
+    data: null,
+  })
+}
+
 module.exports = {
-  createCategoryAPI, getAllCategoriesAPI, getCategoryByIdAPI, updateCategoryAPI, deleteCategoryAPI
+  createCategoryAPI,
+  getAllCategoriesAPI,
+  getCategoryByIdAPI,
+  updateCategoryAPI,
+  deleteCategoryAPI,
+  setDefaultCategoryAPI,
 }

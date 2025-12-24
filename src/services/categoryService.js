@@ -10,13 +10,21 @@ const createCategory = async (userId, categoryData) => {
       deleted: false,
     });
 
-    if (exists){
+    if (exists) {
       return {
         status: false,
         error: 1,
         message: "Category name already exists. Please try another name.",
         data: null,
       };
+    }
+
+    // Nếu set làm mặc định, bỏ mặc định của các category cùng type
+    if (categoryData.is_default) {
+      await Category.updateMany(
+        { userId, type: categoryData.type },
+        { is_default: false }
+      );
     }
 
     const category = await Category.create({
@@ -30,7 +38,7 @@ const createCategory = async (userId, categoryData) => {
       message: "Created successfully",
       data: category.toObject(),
     };
-  } catch(error){
+  } catch (error) {
     return {
       status: false,
       error: -1,
@@ -49,7 +57,7 @@ const getAllCategories = async (userId) => {
       error: 0,
       data: categories.map(c => c.toObject()),
     };
-  } catch(error){
+  } catch (error) {
     return {
       status: false,
       error: -1,
@@ -61,37 +69,9 @@ const getAllCategories = async (userId) => {
 
 const getCategoryById = async (categoryId, userId) => {
   try {
-    const category = await Category.find({ _id: categoryId, userId });
+    const category = await Category.findOne({ _id: categoryId, userId });
 
-    if (!category){
-      return {
-        status: false,
-        error: 1,
-        message: "Category not found",
-        data: null,
-      };
-    }
-
-    return category;
-  } catch(error){
-    return {
-      status: false,
-      error: -1,
-      message: error.message,
-      data: null,
-    };
-  }
-}
-
-const updateCategory = async (categoryId, userId, data) => {
-  try {
-    const category = await Category.findOneAndUpdate(
-      { _id: categoryId, userId },
-      data,
-      { new: true }
-    );
-
-    if (!category){
+    if (!category) {
       return {
         status: false,
         error: 1,
@@ -103,10 +83,51 @@ const updateCategory = async (categoryId, userId, data) => {
     return {
       status: true,
       error: 0,
+      message: "Get category successfully",
+      data: category.toObject(),
+    };
+  } catch (error) {
+    return {
+      status: false,
+      error: -1,
+      message: error.message,
+      data: null,
+    };
+  }
+}
+
+const updateCategory = async (categoryId, userId, data) => {
+  try {
+    const category = await Category.findOne({ _id: categoryId, userId });
+
+    if (!category) {
+      return {
+        status: false,
+        error: 1,
+        message: "Category not found",
+        data: null,
+      };
+    }
+
+    // Nếu set làm mặc định, bỏ mặc định của các category cùng type
+    if (data.is_default) {
+      await Category.updateMany(
+        { userId, type: category.type, _id: { $ne: categoryId } },
+        { is_default: false }
+      );
+    }
+
+    // Update category
+    Object.assign(category, data);
+    await category.save();
+
+    return {
+      status: true,
+      error: 0,
       message: "Updated successfully",
       data: category.toObject(),
     };
-  } catch(error){
+  } catch (error) {
     return {
       status: false,
       error: -1,
@@ -120,7 +141,7 @@ const deleteCategory = async (categoryId, userId) => {
   try {
     const category = await Category.findOne({ _id: categoryId, userId });
 
-    if (!category){
+    if (!category) {
       return {
         status: false,
         error: 1,
@@ -136,7 +157,46 @@ const deleteCategory = async (categoryId, userId) => {
       message: "Deleted successfully",
       data: null,
     };
-  } catch(error){
+  } catch (error) {
+    return {
+      status: false,
+      error: -1,
+      message: error.message,
+      data: null,
+    };
+  }
+}
+
+const setDefaultCategory = async (categoryId, userId) => {
+  try {
+    const category = await Category.findOne({ _id: categoryId, userId });
+
+    if (!category) {
+      return {
+        status: false,
+        error: 1,
+        message: "Category not found",
+        data: null,
+      };
+    }
+
+    // Bỏ mặc định của các category cùng type
+    await Category.updateMany(
+      { userId, type: category.type },
+      { is_default: false }
+    );
+
+    // Set category này làm mặc định
+    category.is_default = true;
+    await category.save();
+
+    return {
+      status: true,
+      error: 0,
+      message: "Set default category successfully",
+      data: category.toObject(),
+    };
+  } catch (error) {
     return {
       status: false,
       error: -1,
@@ -147,5 +207,10 @@ const deleteCategory = async (categoryId, userId) => {
 }
 
 module.exports = {
-  createCategory, getAllCategories, getCategoryById, updateCategory, deleteCategory
+  createCategory,
+  getAllCategories,
+  getCategoryById,
+  updateCategory,
+  deleteCategory,
+  setDefaultCategory,
 }

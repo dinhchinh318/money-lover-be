@@ -15,7 +15,7 @@ const recurringBillSchema = new mongoose.Schema(
       validate: {
         validator: async function (walletId) {
           const wallet = await mongoose.model("Wallet").findById(walletId);
-          return wallet && wallet.user.toString() === this.user.toString();
+          return wallet && wallet.userId && wallet.userId.toString() === this.userId.toString();
         },
         message: "Wallet không thuộc user"
       }
@@ -28,13 +28,18 @@ const recurringBillSchema = new mongoose.Schema(
         validator: async function (catId) {
           if (!catId) return true;
           const cat = await mongoose.model("Category").findById(catId);
+          if (!cat) return false;
+          // Kiểm tra category thuộc user
+          if (cat.userId && this.userId && cat.userId.toString() !== this.userId.toString()) {
+            return false;
+          }
+          // Kiểm tra type phù hợp
           return (
-            cat &&
-            ((this.type === "expense" && cat.type === "expense") ||
-              (this.type === "income" && cat.type === "income"))
+            (this.type === "expense" && cat.type === "expense") ||
+            (this.type === "income" && cat.type === "income")
           );
         },
-        message: "Category không hợp lệ với type (income/expense)"
+        message: "Category không hợp lệ với type (income/expense) hoặc không thuộc user"
       }
     },
     name: {

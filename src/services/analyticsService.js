@@ -1761,6 +1761,9 @@ const suggestOptimizeSpending = async (userId, options = {}) => {
         const mean = cat.avgAmount;
         const stdDev = amounts.length > 1 ? calculateStdDev(amounts, mean) : 0;
         const zScore = stdDev > 0 ? calculateZScore(cat.totalAmount, mean, stdDev) : 0;
+//         const stdDev = calculateStdDev([cat.totalAmount], mean);
+//         const zScore = calculateZScore(cat.totalAmount, mean, stdDev);
+
 
         // Nếu có biến thiên lớn (outlier) → có thể tiết kiệm nhiều hơn
         const adjustmentFactor = Math.abs(zScore) > 1.5 ? 1.2 : 1.0;

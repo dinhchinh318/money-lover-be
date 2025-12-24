@@ -51,9 +51,9 @@ const getUserAPI = async (req, res) => {
         }
     )
 }
-const getAUserAPI = async(req, res) => {
+const getAUserAPI = async (req, res) => {
     let user = await getAUser(req.params.id);
-    if(user){
+    if (user) {
         return res.status(200).json(
             {
                 EC: 0,
@@ -69,21 +69,35 @@ const getAUserAPI = async(req, res) => {
     )
 }
 const updateUserAPI = async (req, res) => {
-    let user = await updateUser(req.body);
-    if (user) {
-        return res.status(200).json(
-            {
+    try {
+        const userId = req.user._id || req.user.id;
+        const updateData = {
+            id: userId,
+            ...req.body,
+        };
+
+        const result = await updateUser(updateData);
+
+        if (result && result.status) {
+            return res.status(200).json({
                 EC: 0,
-                data: user
-            }
-        )
-    }
-    return res.status(200).json(
-        {
-            EC: -1,
-            data: null
+                message: result.message || "Updated successfully",
+                data: result.data,
+            });
         }
-    )
+
+        return res.status(200).json({
+            EC: result?.error || -1,
+            message: result?.message || "Update failed",
+            data: null,
+        });
+    } catch (error) {
+        return res.status(500).json({
+            EC: -1,
+            message: error.message || "Server error",
+            data: null,
+        });
+    }
 }
 const deleteUserAPI = async (req, res) => {
     let user = await deleteUser(req.body);

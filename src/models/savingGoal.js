@@ -15,7 +15,7 @@ const savingGoalSchema = new mongoose.Schema(
       validate: {
         validator: async function (walletId) {
           const wallet = await mongoose.model("Wallet").findById(walletId);
-          return wallet && wallet.user.toString() === this.user.toString();
+          return wallet && wallet.userId && wallet.userId.toString() === this.userId.toString();
         },
         message: "Wallet không thuộc user"
       }

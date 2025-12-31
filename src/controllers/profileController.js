@@ -20,6 +20,21 @@ const updateMyProfileAPI = async (req, res) => {
   }
 };
 
+const uploadAvatarAPI = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const result = await profileService.uploadAvatar(userId, req.file);
+    return res.status(result.status ? 200 : 400).json(result);
+  } catch (error) {
+    return res.status(500).json({
+      status: false,
+      error: -1,
+      message: error.message,
+      data: null,
+    });
+  }
+};
+
 const deleteMyProfileAPI = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -43,6 +58,7 @@ const restoreMyProfileAPI = async (req, res) => {
 module.exports = {
   getMyProfileAPI,
   updateMyProfileAPI,
+  uploadAvatarAPI,
   deleteMyProfileAPI,
   restoreMyProfileAPI,
 };

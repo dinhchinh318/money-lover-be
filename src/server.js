@@ -36,7 +36,7 @@ app.use(
       "https://money-lover-be-eyca.onrender.com",
       "https://moneylover-iota.vercel.app/login",
     ],
-    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "delay"],
     credentials: true,
   })

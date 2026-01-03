@@ -11,8 +11,8 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      //   "https://bingcloth-be.onrender.com",
-      //   "https://bingcloth.vercel.app",
+      "https://bingcloth-be.onrender.com",
+      "http://moneylover-iota.vercel.app",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization", "delay"],

@@ -1,6 +1,6 @@
 require("dotenv").config();
 const express = require("express");
-const connection = require("./configs/DB");
+const connection = require("./configs/db");
 const initRoute = require("./routes/index");
 const cors = require("cors");
 const aiRoutes = require("./routes/ai.routes");
@@ -11,7 +11,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://money-lover-be.onrender.com",
+      "https://money-lover-be-eyca.onrender.com",
       "http://moneylover-iota.vercel.app",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],

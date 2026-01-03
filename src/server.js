@@ -2,15 +2,14 @@
 require("dotenv").config();
 
 const express = require("express");
+const connection = require("./configs/db");
+const initRoute = require("./routes/index");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const compression = require("compression");
 const rateLimit = require("express-rate-limit");
 
-// Đảm bảo đường dẫn này đúng với cấu trúc thư mục của bạn
-const connection = require("./configs/DB"); 
-const initRoute = require("./routes/index");
 
 // --- CÁC ROUTES ---
 // Lưu ý: Nếu chưa tạo file ai.routes.js hoặc analysis.routes.js, hãy comment lại để tránh lỗi crash
@@ -34,7 +33,7 @@ app.use(
   cors({
     origin: [
       "http://localhost:5173",
-      "https://money-lover-be.onrender.com",
+      "https://money-lover-be-eyca.onrender.com",
       "http://moneylover-iota.vercel.app",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],

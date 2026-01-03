@@ -34,7 +34,7 @@ app.use(
     origin: [
       "http://localhost:5173",
       "https://money-lover-be-eyca.onrender.com",
-      "http://moneylover-iota.vercel.app",
+      "https://moneylover-iota.vercel.app/login",
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     allowedHeaders: ["Content-Type", "Authorization", "delay"],

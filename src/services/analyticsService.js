@@ -115,6 +115,11 @@ const calculateGrowthPercent = (current, previous) => {
  */
 const getCategorySpendingSpikes = async (userId, options = {}) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const { months = 3, thresholdPercent = 50 } = options;
     const now = new Date();
     const results = [];
@@ -126,7 +131,7 @@ const getCategorySpendingSpikes = async (userId, options = {}) => {
       const stats = await Transaction.aggregate([
         {
           $match: {
-            userId,
+            userId: userIdObj,
             type: "expense",
             date: { $gte: monthStart, $lte: monthEnd },
           },
@@ -232,6 +237,11 @@ const getCategorySpendingSpikes = async (userId, options = {}) => {
  */
 const getMonthlySpendingSpikes = async (userId, options = {}) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const { months = 12 } = options;
     const now = new Date();
     const monthlyData = [];
@@ -243,7 +253,7 @@ const getMonthlySpendingSpikes = async (userId, options = {}) => {
       const stats = await Transaction.aggregate([
         {
           $match: {
-            userId,
+            userId: userIdObj,
             type: "expense",
             date: { $gte: monthStart, $lte: monthEnd },
           },
@@ -311,8 +321,13 @@ const getMonthlySpendingSpikes = async (userId, options = {}) => {
  */
 const getWalletVariations = async (userId, options = {}) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const { months = 3 } = options;
-    const wallets = await Wallet.find({ userId, is_archived: false }).lean();
+    const wallets = await Wallet.find({ userId: userIdObj, is_archived: false }).lean();
     const now = new Date();
     const walletVariations = [];
 
@@ -326,7 +341,7 @@ const getWalletVariations = async (userId, options = {}) => {
         const stats = await Transaction.aggregate([
           {
             $match: {
-              userId,
+              userId: userIdObj,
               walletId: wallet._id,
               type: "expense",
               date: { $gte: monthStart, $lte: monthEnd },
@@ -404,6 +419,11 @@ const getWalletVariations = async (userId, options = {}) => {
  */
 const detectUnusualLargeExpenses = async (userId, options = {}) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const { days = 30, thresholdMultiplier = 2 } = options;
     const now = new Date();
     const startDate = new Date(now);
@@ -411,7 +431,7 @@ const detectUnusualLargeExpenses = async (userId, options = {}) => {
 
     // Lấy tất cả giao dịch chi tiêu trong khoảng thời gian
     const transactions = await Transaction.find({
-      userId,
+      userId: userIdObj,
       type: "expense",
       date: { $gte: startDate, $lte: now },
     })
@@ -479,6 +499,11 @@ const detectUnusualLargeExpenses = async (userId, options = {}) => {
  */
 const detectUnusualTimeSpending = async (userId, options = {}) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const { days = 30 } = options;
     const now = new Date();
     const startDate = new Date(now);
@@ -486,7 +511,7 @@ const detectUnusualTimeSpending = async (userId, options = {}) => {
 
     // Lấy tất cả giao dịch
     const transactions = await Transaction.find({
-      userId,
+      userId: userIdObj,
       type: "expense",
       date: { $gte: startDate, $lte: now },
     })
@@ -560,6 +585,11 @@ const detectUnusualTimeSpending = async (userId, options = {}) => {
  */
 const detect24hSpendingSpike = async (userId) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const now = new Date();
     const last24h = new Date(now);
     last24h.setHours(now.getHours() - 24);
@@ -570,7 +600,7 @@ const detect24hSpendingSpike = async (userId) => {
       Transaction.aggregate([
         {
           $match: {
-            userId,
+            userId: userIdObj,
             type: "expense",
             date: { $gte: last24h, $lte: now },
           },
@@ -586,7 +616,7 @@ const detect24hSpendingSpike = async (userId) => {
       Transaction.aggregate([
         {
           $match: {
-            userId,
+            userId: userIdObj,
             type: "expense",
             date: { $gte: previous24h, $lte: last24h },
           },
@@ -608,7 +638,7 @@ const detect24hSpendingSpike = async (userId) => {
 
     // Lấy chi tiết giao dịch 24h gần nhất
     const transactions = await Transaction.find({
-      userId,
+      userId: userIdObj,
       type: "expense",
       date: { $gte: last24h, $lte: now },
     })
@@ -651,6 +681,11 @@ const detect24hSpendingSpike = async (userId) => {
  */
 const getMostSpendingDayOfWeek = async (userId, options = {}) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const { weeks = 12 } = options;
     const now = new Date();
     const startDate = new Date(now);
@@ -659,7 +694,7 @@ const getMostSpendingDayOfWeek = async (userId, options = {}) => {
     const stats = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: userIdObj,
           type: "expense",
           date: { $gte: startDate, $lte: now },
         },
@@ -716,24 +751,42 @@ const getMostSpendingDayOfWeek = async (userId, options = {}) => {
  */
 const getMostFrequentCategories = async (userId, options = {}) => {
   try {
-    const { days = 30 } = options;
-    const now = new Date();
-    const startDate = new Date(now);
-    startDate.setDate(now.getDate() - days);
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
+    // Ưu tiên dùng startDate và endDate từ frontend, nếu không có thì tính từ days
+    let startDate, endDate;
+    if (options.startDate && options.endDate) {
+      startDate = new Date(options.startDate);
+      endDate = new Date(options.endDate);
+      // Đảm bảo endDate bao gồm cả ngày cuối cùng (23:59:59)
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      const { days = 30 } = options;
+      endDate = new Date();
+      startDate = new Date(endDate);
+      startDate.setDate(endDate.getDate() - days);
+    }
+
+    console.log(`[DANH MỤC PHÁT SINH NHIỀU NHẤT] userId: ${userIdObj}`);
+    console.log(`[DANH MỤC PHÁT SINH NHIỀU NHẤT] startDate: ${startDate}, endDate: ${endDate}`);
 
     const stats = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: userIdObj,
           type: "expense",
-          date: { $gte: startDate, $lte: now },
+          date: { $gte: startDate, $lte: endDate },
+          categoryId: { $exists: true, $ne: null }, // Chỉ lấy giao dịch có categoryId hợp lệ
         },
       },
       {
         $group: {
           _id: "$categoryId",
           totalAmount: { $sum: "$amount" },
-          count: { $sum: 1 },
+          count: { $sum: 1 }, // Đếm số lượng giao dịch
         },
       },
       {
@@ -744,19 +797,29 @@ const getMostFrequentCategories = async (userId, options = {}) => {
           as: "category",
         },
       },
-      { $unwind: "$category" },
+      { 
+        $unwind: {
+          path: "$category",
+          preserveNullAndEmptyArrays: false // Chỉ giữ các category tồn tại
+        }
+      },
       {
         $project: {
           categoryId: "$_id",
           categoryName: "$category.name",
           categoryIcon: "$category.icon",
           totalAmount: 1,
-          count: 1,
+          count: 1, // Số lượng giao dịch thực tế
           avgAmount: { $divide: ["$totalAmount", "$count"] },
         },
       },
-      { $sort: { count: -1 } },
+      { $sort: { count: -1 } }, // Sắp xếp theo số lượng giao dịch giảm dần
     ]);
+
+    console.log(`[DANH MỤC PHÁT SINH NHIỀU NHẤT] Tìm thấy ${stats.length} danh mục`);
+    stats.forEach((stat, idx) => {
+      console.log(`[DANH MỤC PHÁT SINH NHIỀU NHẤT] ${idx + 1}. ${stat.categoryName}: ${stat.count} giao dịch, ${stat.totalAmount.toLocaleString('vi-VN')} VND`);
+    });
 
     return {
       status: true,
@@ -779,13 +842,22 @@ const getMostFrequentCategories = async (userId, options = {}) => {
  */
 const getTransactionFrequency = async (userId, options = {}) => {
   try {
-    const { days = 30 } = options;
-    const now = new Date();
-    const startDate = new Date(now);
-    startDate.setDate(now.getDate() - days);
+    // Ưu tiên dùng startDate và endDate từ frontend, nếu không có thì tính từ days
+    let startDate, endDate;
+    if (options.startDate && options.endDate) {
+      startDate = new Date(options.startDate);
+      endDate = new Date(options.endDate);
+      // Đảm bảo endDate bao gồm cả ngày cuối cùng (23:59:59)
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      const { days = 30 } = options;
+      endDate = new Date();
+      startDate = new Date(endDate);
+      startDate.setDate(endDate.getDate() - days);
+    }
 
-    console.log(`[TẦN SUẤT GIAO DỊCH] userId: ${userId}, days: ${days}`);
-    console.log(`[TẦN SUẤT GIAO DỊCH] startDate: ${startDate}, endDate: ${now}`);
+    console.log(`[TẦN SUẤT GIAO DỊCH] userId: ${userId}`);
+    console.log(`[TẦN SUẤT GIAO DỊCH] startDate: ${startDate}, endDate: ${endDate}`);
 
     // Đảm bảo userId là ObjectId
     const userIdObj = mongoose.Types.ObjectId.isValid(userId)
@@ -796,7 +868,7 @@ const getTransactionFrequency = async (userId, options = {}) => {
       {
         $match: {
           userId: userIdObj,
-          date: { $gte: startDate, $lte: now },
+          date: { $gte: startDate, $lte: endDate },
         },
       },
       {
@@ -828,7 +900,9 @@ const getTransactionFrequency = async (userId, options = {}) => {
       console.log(`[TẦN SUẤT GIAO DỊCH] Sample transactions:`, sampleTransactions);
     }
 
-    const avgPerDay = days > 0 ? totalTransactions / days : 0;
+    // Tính số ngày thực tế trong khoảng thời gian
+    const actualDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)));
+    const avgPerDay = actualDays > 0 ? totalTransactions / actualDays : 0;
     const avgPerWeek = avgPerDay * 7;
     const avgPerMonth = avgPerDay * 30;
 
@@ -838,12 +912,12 @@ const getTransactionFrequency = async (userId, options = {}) => {
       status: true,
       error: 0,
       message: "Lấy tần suất giao dịch thành công",
-      data: {
-        period: {
-          days,
-          startDate,
-          endDate: now,
-        },
+        data: {
+          period: {
+            days: actualDays,
+            startDate,
+            endDate: endDate,
+          },
         totalTransactions,
         frequency: {
           perDay: avgPerDay,
@@ -874,6 +948,11 @@ const getTransactionFrequency = async (userId, options = {}) => {
  */
 const predictMonthEndExpense7Days = async (userId) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const last7Days = new Date(now);
@@ -883,7 +962,7 @@ const predictMonthEndExpense7Days = async (userId) => {
     const dailyStats = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: userIdObj,
           type: "expense",
           date: { $gte: last7Days, $lte: now },
         },
@@ -905,7 +984,7 @@ const predictMonthEndExpense7Days = async (userId) => {
     const currentMonthStats = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: userIdObj,
           type: "expense",
           date: { $gte: currentMonthStart, $lte: now },
         },
@@ -996,6 +1075,11 @@ const predictMonthEndExpense7Days = async (userId) => {
  */
 const predictMonthEndExpense30Days = async (userId) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const last30Days = new Date(now);
@@ -1005,7 +1089,7 @@ const predictMonthEndExpense30Days = async (userId) => {
     const dailyStats = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: userIdObj,
           type: "expense",
           date: { $gte: last30Days, $lte: now },
         },
@@ -1027,7 +1111,7 @@ const predictMonthEndExpense30Days = async (userId) => {
     const currentMonthStats = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: userIdObj,
           type: "expense",
           date: { $gte: currentMonthStart, $lte: now },
         },
@@ -1117,6 +1201,11 @@ const predictMonthEndExpense30Days = async (userId) => {
  */
 const predictMonthEndExpenseTrend = async (userId) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const last60Days = new Date(now);
@@ -1126,7 +1215,7 @@ const predictMonthEndExpenseTrend = async (userId) => {
     const weeklyStats = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: userIdObj,
           type: "expense",
           date: { $gte: last60Days, $lte: now },
         },
@@ -1173,7 +1262,7 @@ const predictMonthEndExpenseTrend = async (userId) => {
     const currentMonthStats = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: userIdObj,
           type: "expense",
           date: { $gte: currentMonthStart, $lte: now },
         },
@@ -1252,13 +1341,18 @@ const predictMonthEndExpenseTrend = async (userId) => {
  */
 const predictBudgetOverrun = async (userId) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
 
     // Lấy tất cả ngân sách monthly đang active trong tháng này
     const budgets = await Budget.find({
-      userId,
+      userId: userIdObj,
       period: "monthly",
       $or: [
         { start_date: { $lte: currentMonthEnd }, end_date: { $gte: currentMonthStart } },
@@ -1278,8 +1372,6 @@ const predictBudgetOverrun = async (userId) => {
       }
 
       // Xây dựng match query - đảm bảo ObjectId được convert đúng
-      // Convert userId sang ObjectId nếu là string
-      const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
       // Convert categoryId sang ObjectId
       const categoryIdObj = budget.category._id instanceof mongoose.Types.ObjectId
         ? budget.category._id
@@ -1357,7 +1449,7 @@ const predictBudgetOverrun = async (userId) => {
         console.log(`  ⚠️  No transactions found! Checking why...`);
         // Kiểm tra xem có transactions nào của category này không (không filter date)
         const categoryTransactions = await Transaction.find({
-          userId: userId,
+          userId: userIdObj,
           type: "expense",
           categoryId: budget.category._id,
         }).limit(5).lean();
@@ -1369,7 +1461,7 @@ const predictBudgetOverrun = async (userId) => {
         }
         // Kiểm tra xem có transactions nào trong tháng này không (không filter category)
         const monthTransactions = await Transaction.find({
-          userId: userId,
+          userId: userIdObj,
           type: "expense",
           date: { $gte: currentMonthStart, $lte: now },
         }).limit(5).lean();
@@ -1469,6 +1561,11 @@ const predictBudgetOverrun = async (userId) => {
  */
 const predictCategorySpending = async (userId, options = {}) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const { days = 30 } = options;
     const now = new Date();
     const startDate = new Date(now);
@@ -1478,7 +1575,7 @@ const predictCategorySpending = async (userId, options = {}) => {
     const weeklyCategoryStats = await Transaction.aggregate([
       {
         $match: {
-          userId,
+          userId: userIdObj,
           type: "expense",
           date: { $gte: startDate, $lte: now },
         },
@@ -1992,7 +2089,12 @@ const suggestBudgetAdjustment = async (userId) => {
  */
 const suggestWalletTransfer = async (userId) => {
   try {
-    const wallets = await Wallet.find({ userId, is_archived: false }).lean();
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
+    const wallets = await Wallet.find({ userId: userIdObj, is_archived: false }).lean();
     console.log(`[suggestWalletTransfer] Found ${wallets.length} wallets for user ${userId}`);
 
     const suggestions = [];
@@ -2199,6 +2301,11 @@ const suggestWalletTransfer = async (userId) => {
  */
 const createSmartAlerts = async (userId) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const now = new Date();
     const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
@@ -2211,7 +2318,7 @@ const createSmartAlerts = async (userId) => {
       Transaction.aggregate([
         {
           $match: {
-            userId,
+            userId: userIdObj,
             type: "expense",
             date: { $gte: currentMonthStart, $lte: now },
           },
@@ -2226,7 +2333,7 @@ const createSmartAlerts = async (userId) => {
       Transaction.aggregate([
         {
           $match: {
-            userId,
+            userId: userIdObj,
             type: "expense",
             date: { $gte: previousMonthStart, $lte: previousMonthEnd },
           },
@@ -2251,9 +2358,9 @@ const createSmartAlerts = async (userId) => {
     const estimatedIncrease = calculateGrowthPercent(estimatedMonthEnd, previousTotal);
 
     if (estimatedIncrease >= 15) {
-      alerts.push({
-        userId,
-        type: "MONTHLY_SPENDING_INCREASE",
+        alerts.push({
+          userId: userIdObj,
+          type: "MONTHLY_SPENDING_INCREASE",
         title: "Chi tiêu tháng này tăng cao",
         message: `Bạn đang chi nhiều hơn ${estimatedIncrease.toFixed(1)}% so với tháng trước. Dự kiến cuối tháng sẽ chi ${estimatedMonthEnd.toLocaleString("vi-VN")} VND (tháng trước: ${previousTotal.toLocaleString("vi-VN")} VND).`,
         isRead: false,
@@ -2261,7 +2368,7 @@ const createSmartAlerts = async (userId) => {
     }
 
     // 2. Kiểm tra danh mục tăng đột biến
-    const categorySpikes = await getCategorySpendingSpikes(userId, { months: 2, thresholdPercent: 50 });
+    const categorySpikes = await getCategorySpendingSpikes(userIdObj, { months: 2, thresholdPercent: 50 });
     if (categorySpikes.status && categorySpikes.data.spikes.length > 0) {
       categorySpikes.data.spikes.slice(0, 3).forEach((spike) => {
         alerts.push({
@@ -2279,7 +2386,7 @@ const createSmartAlerts = async (userId) => {
     }
 
     // 3. Kiểm tra ngân sách sắp hết (75% trở lên) và vượt ngân sách
-    const budgets = await Budget.find({ userId, period: "monthly" })
+    const budgets = await Budget.find({ userId: userIdObj, period: "monthly" })
       .populate("category", "name icon")
       .lean();
 
@@ -2288,7 +2395,7 @@ const createSmartAlerts = async (userId) => {
       const categoryExpense = await Transaction.aggregate([
         {
           $match: {
-            userId,
+            userId: userIdObj,
             categoryId: budget.category._id || budget.category,
             type: "expense",
             date: { $gte: currentMonthStart, $lte: now },
@@ -2337,7 +2444,7 @@ const createSmartAlerts = async (userId) => {
     }
 
     // Kiểm tra dự đoán vượt ngân sách (từ predictive analytics)
-    const budgetOverrun = await predictBudgetOverrun(userId);
+    const budgetOverrun = await predictBudgetOverrun(userIdObj);
     if (budgetOverrun.status && budgetOverrun.data.atRisk.length > 0) {
       budgetOverrun.data.atRisk.slice(0, 3).forEach((budget) => {
         // Chỉ thêm nếu chưa có cảnh báo cho budget này
@@ -2362,7 +2469,7 @@ const createSmartAlerts = async (userId) => {
     }
 
     // 4. Kiểm tra ví sắp hết tiền
-    const wallets = await Wallet.find({ userId, is_archived: false }).lean();
+    const wallets = await Wallet.find({ userId: userIdObj, is_archived: false }).lean();
     wallets.forEach((wallet) => {
       if (wallet.balance < 100000 && wallet.balance > 0) {
         alerts.push({
@@ -2380,7 +2487,7 @@ const createSmartAlerts = async (userId) => {
     });
 
     // 5. Gợi ý tối ưu chi tiêu
-    const optimizeSuggestions = await suggestOptimizeSpending(userId, { days: 30, thresholdPercent: 20 });
+    const optimizeSuggestions = await suggestOptimizeSpending(userIdObj, { days: 30, thresholdPercent: 20 });
     if (optimizeSuggestions.status && optimizeSuggestions.data.suggestions.length > 0) {
       const topSuggestion = optimizeSuggestions.data.suggestions[0];
       alerts.push({
@@ -2404,7 +2511,7 @@ const createSmartAlerts = async (userId) => {
       oneDayAgo.setHours(now.getHours() - 24);
 
       const existing = await Alert.findOne({
-        userId,
+        userId: userIdObj,
         type: alert.type,
         "related.model": alert.related?.model,
         "related.id": alert.related?.id,
@@ -2442,8 +2549,13 @@ const createSmartAlerts = async (userId) => {
  */
 const getAlertHistory = async (userId, options = {}) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
     const { limit = 50, isRead = null } = options;
-    const query = { userId };
+    const query = { userId: userIdObj };
 
     if (isRead !== null) {
       query.isRead = isRead;
@@ -2478,7 +2590,12 @@ const getAlertHistory = async (userId, options = {}) => {
  */
 const markAlertAsRead = async (userId, alertId) => {
   try {
-    const alert = await Alert.findOne({ _id: alertId, userId });
+    // Đảm bảo userId là ObjectId
+    const userIdObj = mongoose.Types.ObjectId.isValid(userId)
+      ? new mongoose.Types.ObjectId(userId)
+      : userId;
+
+    const alert = await Alert.findOne({ _id: alertId, userId: userIdObj });
 
     if (!alert) {
       return {

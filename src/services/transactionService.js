@@ -752,6 +752,18 @@ const getOverviewStats = async (userId, options = {}) => {
 
     result.balance = result.totalIncome - result.totalExpense;
 
+    // Tính tổng số dư tất cả ví của user (chỉ tính ví chưa bị archive)
+    const wallets = await Wallet.find({
+      userId: userIdObj,
+      is_archived: false,
+    }).lean();
+
+    const totalWalletBalance = wallets.reduce((sum, wallet) => {
+      return sum + (wallet.balance || 0);
+    }, 0);
+
+    result.totalWalletBalance = totalWalletBalance;
+
     return {
       status: true,
       error: 0,

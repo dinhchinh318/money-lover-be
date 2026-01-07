@@ -2,6 +2,8 @@
 require("dotenv").config();
 
 const express = require("express");
+const connection = require("./configs/db");
+const initRoute = require("./routes/index");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");

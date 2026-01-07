@@ -199,6 +199,8 @@ const getMostFrequentCategoriesAPI = async (req, res) => {
     const userId = req.user.id;
     const options = {
       days: parseInt(req.query.days) || 30,
+      startDate: req.query.startDate ? new Date(req.query.startDate) : null,
+      endDate: req.query.endDate ? new Date(req.query.endDate) : null,
     };
 
     const result = await analyticsService.getMostFrequentCategories(userId, options);
@@ -226,6 +228,8 @@ const getTransactionFrequencyAPI = async (req, res) => {
     const userId = req.user.id;
     const options = {
       days: parseInt(req.query.days) || 30,
+      startDate: req.query.startDate ? new Date(req.query.startDate) : null,
+      endDate: req.query.endDate ? new Date(req.query.endDate) : null,
     };
 
     const result = await analyticsService.getTransactionFrequency(userId, options);

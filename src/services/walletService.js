@@ -20,8 +20,8 @@ const createWallet = async (userId, walletData) => {
     const count = await Wallet.countDocuments({ userId });
 
     const wallet = await Wallet.create({
-      userId,
       ...walletData,
+      userId,               // luôn override
       is_default: count === 0,
     });
 

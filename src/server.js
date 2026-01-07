@@ -124,7 +124,7 @@ const globalLimiter = rateLimit({
   skip: (req) => req.path === '/health'
 });
 
-app.use("/v1/api", globalLimiter);
+app.use("/v1/api/chat", globalLimiter);
 
 // ==========================================
 // ROUTES INITIALIZATION

@@ -7,6 +7,8 @@ const analyticsRoute = require("../routes/analytics.routes");
 const budgetRoute = require("../routes/budget.routes");
 const recurringBillRoute = require("../routes/recurringBill.routes");
 const savingGoalRoute = require("../routes/savingGoal.routes");
+const groupRoute = require("../routes/group.routes");
+
 const initRoute = (app) => {
     app.use("/v1/api/auth", authRoute);
     app.use("/v1/api/wallet", walletRoute);
@@ -17,6 +19,7 @@ const initRoute = (app) => {
     app.use("/v1/api/saving-goal", savingGoalRoute);
     app.use("/v1/api/report", reportRoute);
     app.use("/v1/api/analytics", analyticsRoute);
+    app.use("/v1/api/groups", groupRoute);
 }
 
 module.exports = initRoute;

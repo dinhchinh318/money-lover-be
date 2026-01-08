@@ -520,6 +520,9 @@ const compareCurrentYearWithPrevious = async (userId) => {
  */
 const getWalletChanges = async (userId, options = {}) => {
   try {
+    // Đảm bảo userId là ObjectId
+    const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
+    
     const { startDate, endDate } = options;
     const now = new Date();
 
@@ -537,9 +540,12 @@ const getWalletChanges = async (userId, options = {}) => {
 
     // Lấy tất cả ví của user
     const wallets = await Wallet.find({
-      userId,
+      userId: userIdObj,
       is_archived: false,
     }).lean();
+
+    console.log(`[getWalletChanges] Found ${wallets.length} wallets for user ${userIdObj}`);
+    console.log(`[getWalletChanges] Period: ${periodStart.toISOString()} to ${periodEnd.toISOString()}`);
 
     // Lấy số dư ban đầu (trước khoảng thời gian)
     periodStart.setHours(0, 0, 0, 0);
@@ -548,11 +554,11 @@ const getWalletChanges = async (userId, options = {}) => {
 
     const walletChanges = await Promise.all(
       wallets.map(async (wallet) => {
-        // Tính số dư tại thời điểm bắt đầu (balance hiện tại - tổng giao dịch trong kỳ)
+        // Tính tất cả giao dịch trong kỳ cho ví này
         const periodTransactions = await Transaction.aggregate([
           {
             $match: {
-              userId,
+              userId: userIdObj,
               walletId: wallet._id,
               date: { $gte: periodStart, $lte: periodEnd },
             },
@@ -565,29 +571,69 @@ const getWalletChanges = async (userId, options = {}) => {
           },
         ]);
 
+        // Tính các giao dịch transfer (ví này là nguồn - chuyển đi)
+        const transferOutTransactions = await Transaction.aggregate([
+          {
+            $match: {
+              userId: userIdObj,
+              walletId: wallet._id,
+              type: "transfer",
+              date: { $gte: periodStart, $lte: periodEnd },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalAmount: { $sum: "$amount" },
+            },
+          },
+        ]);
+
+        // Tính các giao dịch transfer (ví này là đích - nhận vào)
+        const transferInTransactions = await Transaction.aggregate([
+          {
+            $match: {
+              userId: userIdObj,
+              toWalletId: wallet._id,
+              type: "transfer",
+              date: { $gte: periodStart, $lte: periodEnd },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalAmount: { $sum: "$amount" },
+            },
+          },
+        ]);
+
         let periodIncome = 0;
         let periodExpense = 0;
-        let periodTransferOut = 0;
-        let periodTransferIn = 0;
+        let periodTransferOut = transferOutTransactions[0]?.totalAmount || 0;
+        let periodTransferIn = transferInTransactions[0]?.totalAmount || 0;
 
         periodTransactions.forEach((t) => {
           if (t._id === "income") periodIncome += t.totalAmount;
           else if (t._id === "expense") periodExpense += t.totalAmount;
-          else if (t._id === "transfer") {
-            // Kiểm tra ví này là nguồn hay đích
-            // Cần query thêm để xác định
+          else if (t._id === "loan") periodIncome += t.totalAmount; // Vay được tính như thu nhập
+          else if (t._id === "debt") periodExpense += t.totalAmount; // Nợ được tính như chi tiêu
+          else if (t._id === "adjust") {
+            // Điều chỉnh: nếu amount > 0 là tăng, < 0 là giảm
+            if (t.totalAmount > 0) periodIncome += t.totalAmount;
+            else periodExpense += Math.abs(t.totalAmount);
           }
         });
 
-        // Tính số dư ban đầu (giả định)
+        // Tính số dư ban đầu: số dư hiện tại - (thu - chi + chuyển vào - chuyển ra)
         const currentBalance = wallet.balance || 0;
-        const periodNetChange = periodIncome - periodExpense;
+        const periodNetChange = periodIncome - periodExpense + periodTransferIn - periodTransferOut;
         const estimatedStartBalance = currentBalance - periodNetChange;
 
+        // Tính thay đổi và phần trăm
         const change = currentBalance - estimatedStartBalance;
         const changePercent = estimatedStartBalance === 0
-          ? (currentBalance > 0 ? 100 : 0)
-          : (change / estimatedStartBalance) * 100;
+          ? (currentBalance > 0 ? 100 : currentBalance < 0 ? -100 : 0)
+          : (change / Math.abs(estimatedStartBalance)) * 100;
 
         return {
           walletId: wallet._id,
@@ -596,9 +642,11 @@ const getWalletChanges = async (userId, options = {}) => {
           currentBalance,
           estimatedStartBalance,
           change,
-          changePercent,
+          changePercent: parseFloat(changePercent.toFixed(2)),
           periodIncome,
           periodExpense,
+          periodTransferIn,
+          periodTransferOut,
           trend: change > 0 ? "increase" : change < 0 ? "decrease" : "stable",
         };
       })
@@ -606,6 +654,8 @@ const getWalletChanges = async (userId, options = {}) => {
 
     // Sắp xếp theo thay đổi giảm dần
     walletChanges.sort((a, b) => b.change - a.change);
+
+    console.log(`[getWalletChanges] Returning ${walletChanges.length} wallet changes`);
 
     return {
       status: true,

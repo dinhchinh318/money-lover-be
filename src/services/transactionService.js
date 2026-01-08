@@ -1296,7 +1296,24 @@ const getOverviewStats = async (userId, options = {}) => {
 
     result.netIncome = result.totalIncome - result.totalExpense;
 
-    return { status: true, error: 0, message: "Get overview stats successfully", data: result };
+    // Tính tổng số dư tất cả ví của user (chỉ tính ví chưa bị archive)
+    const wallets = await Wallet.find({
+      userId: userIdObj,
+      is_archived: false,
+    }).lean();
+
+    const totalWalletBalance = wallets.reduce((sum, wallet) => {
+      return sum + (wallet.balance || 0);
+    }, 0);
+
+    result.totalWalletBalance = totalWalletBalance;
+
+    return {
+      status: true,
+      error: 0,
+      message: "Get overview stats successfully",
+      data: result,
+    };
   } catch (error) {
     return { status: false, error: -1, message: error.message, data: null };
   }

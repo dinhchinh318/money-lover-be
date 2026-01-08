@@ -5,8 +5,6 @@ const {
     getSavingGoalById,
     updateSavingGoal,
     deleteSavingGoal,
-    addAmount,
-    withdrawAmount,
 } = require("../services/savingGoalService");
 
 const createSavingGoalAPI = async (req, res) => {
@@ -95,59 +93,7 @@ const deleteSavingGoalAPI = async (req, res) => {
     }
 };
 
-const addAmountAPI = async (req, res) => {
-    try {
-        const userId = req.user._id || req.user.id;
-        const { id } = req.params;
-        const { amount } = req.body;
 
-        if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-            return res.status(400).json({
-                status: false,
-                error: 1,
-                message: "Invalid amount",
-                data: null,
-            });
-        }
-
-        const result = await addAmount(userId, id, amount);
-        return res.status(result.status ? 200 : 400).json(result);
-    } catch (err) {
-        return res.status(500).json({
-            status: false,
-            error: -1,
-            message: err.message || "Server error",
-            data: null,
-        });
-    }
-};
-
-const withdrawAmountAPI = async (req, res) => {
-    try {
-        const userId = req.user._id || req.user.id;
-        const { id } = req.params;
-        const { amount } = req.body;
-
-        if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-            return res.status(400).json({
-                status: false,
-                error: 1,
-                message: "Invalid amount",
-                data: null,
-            });
-        }
-
-        const result = await withdrawAmount(userId, id, amount);
-        return res.status(result.status ? 200 : 400).json(result);
-    } catch (err) {
-        return res.status(500).json({
-            status: false,
-            error: -1,
-            message: err.message || "Server error",
-            data: null,
-        });
-    }
-};
 
 module.exports = {
     createSavingGoalAPI,
@@ -155,8 +101,7 @@ module.exports = {
     getSavingGoalByIdAPI,
     updateSavingGoalAPI,
     deleteSavingGoalAPI,
-    addAmountAPI,
-    withdrawAmountAPI,
+
 };
 
 

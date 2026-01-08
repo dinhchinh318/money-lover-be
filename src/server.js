@@ -207,6 +207,9 @@ const startServer = async () => {
     // Connect to database
     await connection();
     console.log('✓ Database connected successfully');
+    // 🔥 START RECURRING BILL CRON
+    const { startRecurringBillCron } = require("../scripts/recurringBill.cron");
+    startRecurringBillCron();
 
     // Start server
     app.listen(port, () => {

@@ -21,33 +21,58 @@ const register = async (userData) => {
   try {
     const existingEmail = await User.findOne({ email: userData.email });
     if (existingEmail) {
-      return { status: false, error: 1, message: "Email existing. Please try another!", data: null };
+      return {
+        status: false,
+        error: 1,
+        message: "Email existing. Please try another!",
+        data: null,
+      };
     }
 
-    if (!userData.avatar) {
-      userData.avatar = DEFAULT_AVATAR; // bạn vẫn giữ avatar trong User như cũ
-    }
+    // 1) Tạo user (phục vụ đăng nhập)
+    // - Vẫn có name/avatar ở User để tương thích hệ thống hiện tại (nhưng FE sẽ dùng Profile)
+    const user = new User({
+      name: userData.name || "Người Dùng",
+      email: userData.email,
+      password: userData.password,
+      provider: userData.provider || "local",
+      providerId: userData.providerId || null,
+      role: userData.role || "user",
+      isActive: true,
 
-    const user = new User(userData);
+      // giữ avatar ở User như bạn nói
+      avatar: userData.avatar || userData.avatarUrl || DEFAULT_AVATAR,
+      phone: userData.phone || "",
+      address: userData.address || "",
+      description: userData.description || "",
+    });
 
-    // ✅ PHẢI save user trước để có user._id
-    await user.save();
+    await user.save(); // ✅ cần _id
 
-    // ✅ tạo profile (chỉ tạo nếu chưa có)
-    const existedProfile = await Profile.findOne({ userId: user._id });
-    if (!existedProfile) {
-      await Profile.create({
+    // 2) Tạo profile hiển thị (nếu chưa có)
+    let profile = await Profile.findOne({ userId: user._id });
+    if (!profile) {
+      profile = await Profile.create({
         userId: user._id,
-        displayName: user.name || "Người Dùng",
-        avatarUrl: user.avatar || DEFAULT_AVATAR,
-        // các field khác để default theo schema cũng được
+        displayName: userData.displayName || userData.name || "Người Dùng",
+        bio: userData.bio || "",
+        avatarUrl: userData.avatarUrl || userData.avatar || DEFAULT_AVATAR,
+        phone: userData.phone || "",
+        address: userData.address || "",
+        dateOfBirth: userData.dateOfBirth ?? null,
+        gender: userData.gender || "unknown",
+        occupation: userData.occupation || "",
+        hasCompletedOnboarding: userData.hasCompletedOnboarding ?? false,
+        favoriteCategories: userData.favoriteCategories || [],
       });
     }
 
-    // (giữ y nguyên các phần bạn đang có)
-    // gửi mail (khuyến nghị await, nhưng nếu bạn muốn giữ y chang thì bỏ qua)
-    sendWelcomeEmail(user.email, user.name).catch(err => console.log("Send mail error:", err));
+    // 3) Gửi mail (giữ như cũ)
+    sendWelcomeEmail(user.email, profile.displayName).catch((err) =>
+      console.log("Send mail error:", err)
+    );
 
+    // 4) Token + refresh token
     const accessToken = generateToken(user._id);
     const refreshToken = generateRefreshToken(user._id);
     user.refreshToken = refreshToken;
@@ -55,16 +80,20 @@ const register = async (userData) => {
 
     await seedDefaultCategoriesForUser(user._id);
 
+    // 5) trả data: user dùng cho auth + profile dùng cho hiển thị
     const userObj = user.toObject();
     delete userObj.password;
     delete userObj.refreshToken;
+    delete userObj.otp;
+    delete userObj.otpExpires;
 
     return {
       status: true,
       error: 0,
       message: "Register successfully!",
       data: {
-        user: userObj,
+        user: userObj,     // auth
+        profile,           // display
         accessToken,
         refreshToken,
       },
@@ -74,17 +103,31 @@ const register = async (userData) => {
   }
 };
 
+
 const login = async (email, password) => {
   try {
     const user = await User.findOne({ email });
 
     if (!user || !user.isActive) {
-      return { status: false, error: 1, message: "Invalid email or incorrect password!", data: null };
+      return {
+        status: false,
+        error: 1,
+        message: "Invalid email or incorrect password!",
+        data: null,
+      };
     }
 
-    const isMatch = await user.isPasswordMatch(password);
-    if (!isMatch) {
-      return { status: false, error: 1, message: "Invalid email or incorrect password!", data: null };
+    // local thì mới check password (google/facebook có thể không có password)
+    if (!user.provider || user.provider === "local") {
+      const isMatch = await user.isPasswordMatch(password);
+      if (!isMatch) {
+        return {
+          status: false,
+          error: 1,
+          message: "Invalid email or incorrect password!",
+          data: null,
+        };
+      }
     }
 
     const accessToken = generateToken(user._id);
@@ -92,31 +135,32 @@ const login = async (email, password) => {
     user.refreshToken = refreshToken;
     await user.save();
 
+    // ✅ Profile là dữ liệu hiển thị
     let profile = await Profile.findOne({ userId: user._id });
     if (!profile) {
-        profile = await Profile.create({
-            userId: user._id,
-            displayName: user.name || "Người Dùng",
-            avatarUrl: user.avatar || DEFAULT_AVATAR,
-        });
+      profile = await Profile.create({
+        userId: user._id,
+        displayName: user.name || "Người Dùng",
+        avatarUrl: user.avatar || DEFAULT_AVATAR,
+        phone: user.phone || "",
+        address: user.address || "",
+        bio: user.description || "",
+      });
     }
 
+    const userObj = user.toObject();
+    delete userObj.password;
+    delete userObj.refreshToken;
+    delete userObj.otp;
+    delete userObj.otpExpires;
 
     return {
       status: true,
       error: 0,
       message: "Login successfully!",
       data: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        avatar: user.avatar,
-        role: user.role,
-        phone: user.phone,
-        address: user.address,
-
-        // ✅ thêm profile cho FE dùng
-        profile: profile || null,
+        user: userObj,   // auth (id/email/role/provider/isActive...)
+        profile,         // display (displayName/avatarUrl/phone/address/...)
       },
       accessToken,
       refreshToken,
@@ -179,33 +223,42 @@ const logout = async (userId) => {
     }
 }
 const getAccount = async (userId) => {
-    try {
-        const user = await User.findById(userId).select("-password");;
-        if (!user) {
-            return {
-                status: false,
-                error: 1,
-                message: "Can not found this account!",
-                data: null,
-            }
-        }
-        return {
-            status: true,
-            error: 0,
-            message: "Get info account successfully!",
-            data: {
-                user: user
-            }
-        }
-    } catch (error) {
-        return {
-            status: false,
-            error: 0,
-            message: error.message,
-            data: null
-        }
+  try {
+    const user = await User.findById(userId).select("-password");
+    if (!user) {
+      return {
+        status: false,
+        error: 1,
+        message: "Can not found this account!",
+        data: null,
+      };
     }
-}
+
+    // ✅ đảm bảo luôn có profile + default avatarUrl
+    const profile = await Profile.findOneAndUpdate(
+      { userId: user._id },
+      { $setOnInsert: { userId: user._id } },
+      { new: true, upsert: true, setDefaultsOnInsert: true }
+    );
+
+    return {
+      status: true,
+      error: 0,
+      message: "Get info account successfully!",
+      data: {
+        user,
+        profile, // ✅ thêm profile
+      },
+    };
+  } catch (error) {
+    return {
+      status: false,
+      error: 1, // ✅ lỗi thì nên là 1
+      message: error.message,
+      data: null,
+    };
+  }
+};
 const forgotPassword = async (email) => {
     try {
         const user = await User.findOne({ email });

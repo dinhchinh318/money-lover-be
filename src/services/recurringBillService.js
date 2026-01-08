@@ -2,6 +2,7 @@
 const RecurringBill = require("../models/recurringBill");
 const Wallet = require("../models/wallet");
 const Category = require("../models/category");
+const Transaction = require("../models/transaction");
 
 const createRecurringBill = async (userId, data) => {
     try {
@@ -158,6 +159,32 @@ const getRecurringBillById = async (userId, id) => {
         };
     }
 };
+const calculateNextRun = (bill) => {
+    const nextRun = new Date(bill.next_run);
+
+    switch (bill.frequency) {
+        case "daily":
+            nextRun.setDate(nextRun.getDate() + 1);
+            break;
+        case "weekly":
+            nextRun.setDate(nextRun.getDate() + 7);
+            break;
+        case "biweekly":
+            nextRun.setDate(nextRun.getDate() + 14);
+            break;
+        case "monthly":
+            nextRun.setMonth(nextRun.getMonth() + 1);
+            break;
+        case "yearly":
+            nextRun.setFullYear(nextRun.getFullYear() + 1);
+            break;
+        case "custom":
+            // custom → để scheduler xử lý
+            break;
+    }
+
+    return nextRun;
+};
 
 const updateRecurringBill = async (userId, id, data) => {
     try {
@@ -272,6 +299,7 @@ const deleteRecurringBill = async (userId, id) => {
 };
 
 const payRecurringBill = async (userId, id) => {
+
     try {
         const recurringBill = await RecurringBill.findOne({ _id: id, userId })
             .populate("wallet");
@@ -293,35 +321,42 @@ const payRecurringBill = async (userId, id) => {
                 data: null,
             };
         }
-
-        // Calculate next run date
-        const nextRun = new Date(recurringBill.next_run);
-        switch (recurringBill.frequency) {
-            case "daily":
-                nextRun.setDate(nextRun.getDate() + 1);
-                break;
-            case "weekly":
-                nextRun.setDate(nextRun.getDate() + 7);
-                break;
-            case "biweekly":
-                nextRun.setDate(nextRun.getDate() + 14);
-                break;
-            case "monthly":
-                nextRun.setMonth(nextRun.getMonth() + 1);
-                break;
-            case "yearly":
-                nextRun.setFullYear(nextRun.getFullYear() + 1);
-                break;
+        const wallet = recurringBill.wallet;
+        if (!wallet) {
+            return {
+                status: false,
+                error: 1,
+                message: "Wallet not found",
+                data: null,
+            };
         }
+        const transaction = await Transaction.create({
+            userId,
+            type: recurringBill.type,
+            amount: recurringBill.amount,
+            walletId: wallet._id,
+            categoryId: recurringBill.category,
+            description: recurringBill.name,
+            source: "recurring_bill",
+            recurring_bill: recurringBill._id,
+            createdAt: new Date(),
+        });
+        if (recurringBill.type === "expense") {
+            wallet.balance -= recurringBill.amount;
+        } else {
+            wallet.balance += recurringBill.amount;
+        }
+        await wallet.save();
 
-        recurringBill.next_run = nextRun;
+        // 3️⃣ Update next_run
+        recurringBill.next_run = calculateNextRun(recurringBill);
         await recurringBill.save();
 
         return {
             status: true,
             error: 0,
-            message: "Recurring bill paid successfully",
-            data: recurringBill,
+            message: "Pay recurring bill successfully",
+            data: transaction,
         };
     } catch (error) {
         return {

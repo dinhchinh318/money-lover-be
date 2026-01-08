@@ -58,6 +58,13 @@ const createSavingGoal = async (userId, data) => {
  * Calculate progress from wallet balance
  */
 const mapSavingGoalWithProgress = (goal) => {
+  if (goal.is_completed) {
+    return {
+      ...goal.toObject(),
+      current_amount: goal.target_amount,
+      progress: 100
+    };
+  }
   const walletBalance = goal.wallet?.balance || 0;
   const target = goal.target_amount || 0;
 
@@ -211,6 +218,20 @@ const deleteSavingGoal = async (userId, id) => {
     };
   }
 };
+const completeSavingGoal = async (userId, id) => {
+  const goal = await SavingGoal.findOne({ _id: id, userId });
+  if (!goal) {
+    throw new Error("SavingGoal not found");
+  }
+
+  goal.is_completed = true;
+  goal.is_active = false; // optional
+  goal.target_date = new Date();
+  await goal.save();
+
+  return goal;
+};
+
 
 module.exports = {
   createSavingGoal,
@@ -218,4 +239,5 @@ module.exports = {
   getSavingGoalById,
   updateSavingGoal,
   deleteSavingGoal,
+  completeSavingGoal,
 };

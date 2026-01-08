@@ -5,6 +5,7 @@ const {
     getSavingGoalById,
     updateSavingGoal,
     deleteSavingGoal,
+    completeSavingGoal,
 } = require("../services/savingGoalService");
 
 const createSavingGoalAPI = async (req, res) => {
@@ -92,6 +93,24 @@ const deleteSavingGoalAPI = async (req, res) => {
         });
     }
 };
+const completeSavingGoalAPI = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
+
+    const result = await completeSavingGoal(userId, id);
+
+    return res.json({
+      status: true,
+      data: result
+    });
+  } catch (err) {
+    return res.status(400).json({
+      status: false,
+      message: err.message
+    });
+  }
+};
 
 
 
@@ -101,7 +120,7 @@ module.exports = {
     getSavingGoalByIdAPI,
     updateSavingGoalAPI,
     deleteSavingGoalAPI,
-
+    completeSavingGoalAPI,
 };
 
 

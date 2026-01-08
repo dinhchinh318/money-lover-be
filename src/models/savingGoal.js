@@ -45,13 +45,23 @@ const savingGoalSchema = new mongoose.Schema(
       type: Date,
       default: null,
       validate: {
-        validator: (val) => !val || val > new Date(),
+        validator: function (val) {
+          // cho phép nếu đã hoàn thành
+          if (this.is_completed) return true;
+
+          // chưa hoàn thành thì phải là tương lai
+          return !val || val > new Date();
+        },
         message: "target_date must be in the future"
       }
     },
     is_active: {
       type: Boolean,
       default: true
+    },
+    is_completed: {
+      type: Boolean,
+      default: false
     },
     description: {
       type: String,

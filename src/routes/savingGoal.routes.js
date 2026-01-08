@@ -9,6 +9,7 @@ router.get("/", verifyToken, savingGoalController.getAllSavingGoalsAPI);
 router.get("/:id", verifyToken, savingGoalController.getSavingGoalByIdAPI);
 router.put("/:id", verifyToken, savingGoalController.updateSavingGoalAPI);
 router.delete("/:id", verifyToken, savingGoalController.deleteSavingGoalAPI);
+router.patch("/:id/complete", verifyToken, savingGoalController.completeSavingGoalAPI);
 
 
 module.exports = router;

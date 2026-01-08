@@ -15,7 +15,16 @@ const createBudget = async (userId, data) => {
         data: null,
       };
     }
-
+    const normalized = {
+      name: data.name,
+      categoryId: data.categoryId || data.category,
+      walletId: data.walletId || data.wallet,
+      limit: data.limit ?? data.limit_amount,
+      period: data.period,
+      start_date: data.start_date,
+      end_date: data.end_date,
+      description: data.description,
+    };
     const {
       name,
       categoryId,
@@ -25,7 +34,7 @@ const createBudget = async (userId, data) => {
       start_date,
       end_date,
       description,
-    } = data;
+    } = normalized;
 
     if (
       !name ||
@@ -70,7 +79,7 @@ const createBudget = async (userId, data) => {
       userId,
       name: String(name).trim(),
       category: categoryId,
-      wallet: walletId || null,
+      wallet: walletId || undefined,
       limit_amount: Number(limit),
       period: period || "monthly",
       start_date: start_date ? new Date(start_date) : null,

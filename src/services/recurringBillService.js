@@ -266,6 +266,79 @@ const updateRecurringBill = async (userId, id, data) => {
         };
     }
 };
+const pauseRecurringBill = async (userId, id) => {
+    const bill = await RecurringBill.findOne({ _id: id, userId });
+
+    if (!bill) {
+        return {
+            status: false,
+            error: 1,
+            message: "Recurring bill not found",
+            data: null,
+        };
+    }
+
+    if (!bill.active) {
+        return {
+            status: false,
+            error: 1,
+            message: "Recurring bill already paused",
+            data: null,
+        };
+    }
+
+    bill.active = false;
+    await bill.save();
+
+    return {
+        status: true,
+        error: 0,
+        message: "Recurring bill paused successfully",
+        data: bill,
+    };
+};
+
+const resumeRecurringBill = async (userId, id) => {
+    const bill = await RecurringBill.findOne({ _id: id, userId });
+
+    if (!bill) {
+        return {
+            status: false,
+            error: 1,
+            message: "Recurring bill not found",
+            data: null,
+        };
+    }
+
+    if (bill.active) {
+        return {
+            status: false,
+            error: 1,
+            message: "Recurring bill already active",
+            data: null,
+        };
+    }
+
+    // Optional: check ends_at
+    if (bill.ends_at && bill.ends_at < new Date()) {
+        return {
+            status: false,
+            error: 1,
+            message: "Recurring bill has already ended",
+            data: null,
+        };
+    }
+
+    bill.active = true;
+    await bill.save();
+
+    return {
+        status: true,
+        error: 0,
+        message: "Recurring bill resumed successfully",
+        data: bill,
+    };
+};
 
 const deleteRecurringBill = async (userId, id) => {
     try {
@@ -375,6 +448,8 @@ module.exports = {
     updateRecurringBill,
     deleteRecurringBill,
     payRecurringBill,
+    pauseRecurringBill,
+    resumeRecurringBill,
 };
 
 

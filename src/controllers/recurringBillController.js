@@ -6,6 +6,8 @@ const {
     updateRecurringBill,
     deleteRecurringBill,
     payRecurringBill,
+    pauseRecurringBill,
+    resumeRecurringBill,
 } = require("../services/recurringBillService");
 
 const createRecurringBillAPI = async (req, res) => {
@@ -110,6 +112,39 @@ const payRecurringBillAPI = async (req, res) => {
         });
     }
 };
+const pauseRecurringBillAPI = async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+        const { id } = req.params;
+
+        const result = await pauseRecurringBill(userId, id);
+        return res.status(result.status ? 200 : 400).json(result);
+    } catch (err) {
+        return res.status(500).json({
+            status: false,
+            error: -1,
+            message: err.message,
+            data: null,
+        });
+    }
+};
+
+const resumeRecurringBillAPI = async (req, res) => {
+    try {
+        const userId = req.user._id || req.user.id;
+        const { id } = req.params;
+
+        const result = await resumeRecurringBill(userId, id);
+        return res.status(result.status ? 200 : 400).json(result);
+    } catch (err) {
+        return res.status(500).json({
+            status: false,
+            error: -1,
+            message: err.message,
+            data: null,
+        });
+    }
+};
 
 module.exports = {
     createRecurringBillAPI,
@@ -118,6 +153,8 @@ module.exports = {
     updateRecurringBillAPI,
     deleteRecurringBillAPI,
     payRecurringBillAPI,
+    pauseRecurringBillAPI,
+    resumeRecurringBillAPI,
 };
 
 

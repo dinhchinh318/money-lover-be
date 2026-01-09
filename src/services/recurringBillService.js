@@ -266,6 +266,79 @@ const updateRecurringBill = async (userId, id, data) => {
         };
     }
 };
+const pauseRecurringBill = async (userId, id) => {
+    const bill = await RecurringBill.findOne({ _id: id, userId });
+
+    if (!bill) {
+        return {
+            status: false,
+            error: 1,
+            message: "Recurring bill not found",
+            data: null,
+        };
+    }
+
+    if (!bill.active) {
+        return {
+            status: false,
+            error: 1,
+            message: "Recurring bill already paused",
+            data: null,
+        };
+    }
+
+    bill.active = false;
+    await bill.save();
+
+    return {
+        status: true,
+        error: 0,
+        message: "Recurring bill paused successfully",
+        data: bill,
+    };
+};
+
+const resumeRecurringBill = async (userId, id) => {
+    const bill = await RecurringBill.findOne({ _id: id, userId });
+
+    if (!bill) {
+        return {
+            status: false,
+            error: 1,
+            message: "Recurring bill not found",
+            data: null,
+        };
+    }
+
+    if (bill.active) {
+        return {
+            status: false,
+            error: 1,
+            message: "Recurring bill already active",
+            data: null,
+        };
+    }
+
+    // Optional: check ends_at
+    if (bill.ends_at && bill.ends_at < new Date()) {
+        return {
+            status: false,
+            error: 1,
+            message: "Recurring bill has already ended",
+            data: null,
+        };
+    }
+
+    bill.active = true;
+    await bill.save();
+
+    return {
+        status: true,
+        error: 0,
+        message: "Recurring bill resumed successfully",
+        data: bill,
+    };
+};
 
 const deleteRecurringBill = async (userId, id) => {
     try {
@@ -299,74 +372,75 @@ const deleteRecurringBill = async (userId, id) => {
 };
 
 const payRecurringBill = async (userId, id) => {
+    const recurringBill = await RecurringBill.findOne({ _id: id, userId })
+        .populate("wallet");
 
-    try {
-        const recurringBill = await RecurringBill.findOne({ _id: id, userId })
-            .populate("wallet");
-
-        if (!recurringBill) {
-            return {
-                status: false,
-                error: 1,
-                message: "Recurring bill not found",
-                data: null,
-            };
-        }
-
-        if (!recurringBill.active) {
-            return {
-                status: false,
-                error: 1,
-                message: "Recurring bill is not active",
-                data: null,
-            };
-        }
-        const wallet = recurringBill.wallet;
-        if (!wallet) {
-            return {
-                status: false,
-                error: 1,
-                message: "Wallet not found",
-                data: null,
-            };
-        }
-        const transaction = await Transaction.create({
-            userId,
-            type: recurringBill.type,
-            amount: recurringBill.amount,
-            walletId: wallet._id,
-            categoryId: recurringBill.category,
-            description: recurringBill.name,
-            source: "recurring_bill",
-            recurring_bill: recurringBill._id,
-            createdAt: new Date(),
-        });
-        if (recurringBill.type === "expense") {
-            wallet.balance -= recurringBill.amount;
-        } else {
-            wallet.balance += recurringBill.amount;
-        }
-        await wallet.save();
-
-        // 3️⃣ Update next_run
-        recurringBill.next_run = calculateNextRun(recurringBill);
-        await recurringBill.save();
-
-        return {
-            status: true,
-            error: 0,
-            message: "Pay recurring bill successfully",
-            data: transaction,
-        };
-    } catch (error) {
+    if (!recurringBill) {
         return {
             status: false,
-            error: -1,
-            message: error.message || "Server error",
+            error: 1,
+            message: "Recurring bill not found",
             data: null,
         };
     }
+
+    if (!recurringBill.active) {
+        return {
+            status: false,
+            error: 1,
+            message: "Recurring bill is not active",
+            data: null,
+        };
+    }
+
+    // 🔒 Chặn thanh toán 2 lần / tháng
+    if (
+        recurringBill.last_paid_at &&
+        dayjs(recurringBill.last_paid_at).isSame(dayjs(), "month")
+    ) {
+        return {
+            status: false,
+            error: 1,
+            message: "Hóa đơn này đã được thanh toán trong tháng này",
+            data: null,
+        };
+    }
+
+    const wallet = recurringBill.wallet;
+
+    await Transaction.create({
+        userId,
+        type: recurringBill.type,
+        amount: recurringBill.amount,
+        walletId: wallet._id,
+        categoryId: recurringBill.category,
+        description: recurringBill.name,
+        source: "recurring_bill",
+        recurring_bill: recurringBill._id,
+        createdAt: new Date(),
+    });
+
+    if (recurringBill.type === "expense") {
+        wallet.balance -= recurringBill.amount;
+    } else {
+        wallet.balance += recurringBill.amount;
+    }
+
+    await wallet.save();
+
+    // 🔥 NEW
+    recurringBill.last_paid_at = new Date();
+    recurringBill.next_run = calculateNextRun(recurringBill);
+    await recurringBill.save();
+
+    return {
+        status: true,
+        error: 0,
+        message: "Pay recurring bill successfully",
+        data: null,
+    };
 };
+
 
 module.exports = {
     createRecurringBill,
@@ -375,6 +449,8 @@ module.exports = {
     updateRecurringBill,
     deleteRecurringBill,
     payRecurringBill,
+    pauseRecurringBill,
+    resumeRecurringBill,
 };
 
 

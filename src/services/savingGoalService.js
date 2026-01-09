@@ -1,7 +1,7 @@
 const SavingGoal = require("../models/savingGoal");
 const Wallet = require("../models/wallet");
-
-
+const { createTransaction } = require("./transactionService");
+const Category = require("../models/category");
 const createSavingGoal = async (userId, data) => {
   try {
     const { name, walletId, target_amount, target_date, description } = data;
@@ -57,73 +57,82 @@ const depositToSavingGoal = async (userId, goalId, amount) => {
     throw new Error("Amount must be greater than 0");
   }
 
-  // 1️⃣ Lấy goal
   const goal = await SavingGoal.findOne({ _id: goalId, userId });
-  if (!goal) {
-    throw new Error("SavingGoal not found");
+  if (!goal) throw new Error("SavingGoal not found");
+
+  // ✅ 1️⃣ LẤY CATEGORY EXPENSE
+  const categoryId = await getOtherCategoryId(userId, "expense");
+
+  // ✅ 2️⃣ TẠO TRANSACTION
+  const txResult = await createTransaction(userId, {
+    walletId: goal.wallet,
+    amount,
+    type: "expense",
+    categoryId,
+    note: `Thêm tiền vào mục tiêu: ${goal.name}`,
+    ref_id: goal._id,
+  });
+
+  if (!txResult.status) {
+    throw new Error(txResult.message || "Create transaction failed");
   }
 
-  // 2️⃣ Lấy ví
-  const wallet = await Wallet.findOne({ _id: goal.wallet, userId });
-  if (!wallet) {
-    throw new Error("Wallet not found");
-  }
-
-  // 3️⃣ Check tiền ví
-  if (wallet.balance < amount) {
-    throw new Error("Wallet balance not enough");
-  }
-
-  // 4️⃣ Trừ ví – cộng goal
-  wallet.balance -= amount;
+  // ✅ 3️⃣ UPDATE GOAL
   goal.current_amount += amount;
 
-  // 5️⃣ Nếu đủ target → completed
   if (goal.current_amount >= goal.target_amount) {
     goal.is_completed = true;
     goal.is_active = false;
   }
 
-  // 6️⃣ Save
-  await wallet.save();
   await goal.save();
 
   return goal;
 };
+
+
 const withdrawFromSavingGoal = async (userId, goalId, amount) => {
   if (!amount || amount <= 0) {
     throw new Error("Amount must be greater than 0");
   }
 
-  // 1️⃣ Lấy goal
   const goal = await SavingGoal.findOne({ _id: goalId, userId });
-  if (!goal) {
-    throw new Error("SavingGoal not found");
-  }
+  if (!goal) throw new Error("SavingGoal not found");
 
-  // 2️⃣ Check tiền goal
   if (goal.current_amount < amount) {
     throw new Error("SavingGoal balance not enough");
   }
 
-  // 3️⃣ Lấy ví
-  const wallet = await Wallet.findOne({ _id: goal.wallet, userId });
+  // ✅ 1️⃣ LẤY CATEGORY INCOME
+  const categoryId = await getOtherCategoryId(userId, "income");
 
-  // 4️⃣ Trừ goal – cộng ví
+  // ✅ 2️⃣ TRANSACTION
+  const txResult = await createTransaction(userId, {
+    walletId: goal.wallet,
+    amount,
+    type: "income",
+    categoryId,
+    note: `Rút tiền từ mục tiêu: ${goal.name}`,
+    ref_id: goal._id,
+  });
+
+  if (!txResult.status) {
+    throw new Error(txResult.message || "Create transaction failed");
+  }
+
+  // ✅ 3️⃣ UPDATE GOAL
   goal.current_amount -= amount;
-  wallet.balance += amount;
 
-  // 5️⃣ Nếu rút ra < target → active lại
   if (goal.current_amount < goal.target_amount) {
     goal.is_completed = false;
     goal.is_active = true;
   }
 
   await goal.save();
-  await wallet.save();
 
   return goal;
 };
+
 
 const mapSavingGoalWithProgress = (goal) => {
   const current = goal.current_amount || 0;
@@ -193,6 +202,19 @@ const getSavingGoalById = async (userId, id) => {
       data: null,
     };
   }
+};
+const getOtherCategoryId = async (userId, type) => {
+  const category = await Category.findOne({
+    userId,
+    name: "Khác",
+    type,
+  });
+
+  if (!category) {
+    throw new Error(`Category 'Khác' (${type}) not found`);
+  }
+
+  return category._id;
 };
 
 const updateSavingGoal = async (userId, id, data) => {

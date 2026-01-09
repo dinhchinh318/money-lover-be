@@ -6,6 +6,8 @@ const {
     updateSavingGoal,
     deleteSavingGoal,
     completeSavingGoal,
+    depositToSavingGoal,
+    withdrawFromSavingGoal,
 } = require("../services/savingGoalService");
 
 const createSavingGoalAPI = async (req, res) => {
@@ -112,6 +114,52 @@ const completeSavingGoalAPI = async (req, res) => {
   }
 };
 
+const depositSavingGoalAPI = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const { id } = req.params;
+    const { amount } = req.body;
+
+    const result = await depositToSavingGoal(
+      userId,
+      id,
+      Number(amount)
+    );
+
+    return res.json({
+      status: true,
+      data: result
+    });
+  } catch (err) {
+    return res.status(400).json({
+      status: false,
+      message: err.message
+    });
+  }
+};
+const withdrawSavingGoalAPI = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const { id } = req.params;
+    const { amount } = req.body;
+
+    const result = await withdrawFromSavingGoal(
+      userId,
+      id,
+      Number(amount)
+    );
+
+    return res.json({
+      status: true,
+      data: result
+    });
+  } catch (err) {
+    return res.status(400).json({
+      status: false,
+      message: err.message
+    });
+  }
+};
 
 
 module.exports = {
@@ -121,6 +169,8 @@ module.exports = {
     updateSavingGoalAPI,
     deleteSavingGoalAPI,
     completeSavingGoalAPI,
+    depositSavingGoalAPI,
+    withdrawSavingGoalAPI,
 };
 
 

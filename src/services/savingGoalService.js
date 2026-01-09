@@ -1,10 +1,7 @@
 const SavingGoal = require("../models/savingGoal");
 const Wallet = require("../models/wallet");
 
-/**
- * Create saving goal
- * current_amount = wallet.balance (KHÔNG LƯU DB)
- */
+
 const createSavingGoal = async (userId, data) => {
   try {
     const { name, walletId, target_amount, target_date, description } = data;
@@ -33,9 +30,11 @@ const createSavingGoal = async (userId, data) => {
       name,
       wallet: walletId,
       target_amount: Number(target_amount),
+      current_amount: 0,          // 👈 CHỈ DÒNG NÀY
       target_date: target_date ? new Date(target_date) : null,
       description: description || "",
       is_active: true,
+      is_completed: false
     });
 
     return {
@@ -53,25 +52,87 @@ const createSavingGoal = async (userId, data) => {
     };
   }
 };
-
-/**
- * Calculate progress from wallet balance
- */
-const mapSavingGoalWithProgress = (goal) => {
-  if (goal.is_completed) {
-    return {
-      ...goal.toObject(),
-      current_amount: goal.target_amount,
-      progress: 100
-    };
+const depositToSavingGoal = async (userId, goalId, amount) => {
+  if (!amount || amount <= 0) {
+    throw new Error("Amount must be greater than 0");
   }
-  const walletBalance = goal.wallet?.balance || 0;
+
+  // 1️⃣ Lấy goal
+  const goal = await SavingGoal.findOne({ _id: goalId, userId });
+  if (!goal) {
+    throw new Error("SavingGoal not found");
+  }
+
+  // 2️⃣ Lấy ví
+  const wallet = await Wallet.findOne({ _id: goal.wallet, userId });
+  if (!wallet) {
+    throw new Error("Wallet not found");
+  }
+
+  // 3️⃣ Check tiền ví
+  if (wallet.balance < amount) {
+    throw new Error("Wallet balance not enough");
+  }
+
+  // 4️⃣ Trừ ví – cộng goal
+  wallet.balance -= amount;
+  goal.current_amount += amount;
+
+  // 5️⃣ Nếu đủ target → completed
+  if (goal.current_amount >= goal.target_amount) {
+    goal.is_completed = true;
+    goal.is_active = false;
+  }
+
+  // 6️⃣ Save
+  await wallet.save();
+  await goal.save();
+
+  return goal;
+};
+const withdrawFromSavingGoal = async (userId, goalId, amount) => {
+  if (!amount || amount <= 0) {
+    throw new Error("Amount must be greater than 0");
+  }
+
+  // 1️⃣ Lấy goal
+  const goal = await SavingGoal.findOne({ _id: goalId, userId });
+  if (!goal) {
+    throw new Error("SavingGoal not found");
+  }
+
+  // 2️⃣ Check tiền goal
+  if (goal.current_amount < amount) {
+    throw new Error("SavingGoal balance not enough");
+  }
+
+  // 3️⃣ Lấy ví
+  const wallet = await Wallet.findOne({ _id: goal.wallet, userId });
+
+  // 4️⃣ Trừ goal – cộng ví
+  goal.current_amount -= amount;
+  wallet.balance += amount;
+
+  // 5️⃣ Nếu rút ra < target → active lại
+  if (goal.current_amount < goal.target_amount) {
+    goal.is_completed = false;
+    goal.is_active = true;
+  }
+
+  await goal.save();
+  await wallet.save();
+
+  return goal;
+};
+
+const mapSavingGoalWithProgress = (goal) => {
+  const current = goal.current_amount || 0;
   const target = goal.target_amount || 0;
 
   return {
     ...goal.toObject(),
-    current_amount: walletBalance,
-    progress: target > 0 ? Math.min((walletBalance / target) * 100, 100) : 0,
+    progress:
+      target > 0 ? Math.min((current / target) * 100, 100) : 0,
   };
 };
 
@@ -240,4 +301,6 @@ module.exports = {
   updateSavingGoal,
   deleteSavingGoal,
   completeSavingGoal,
+  depositToSavingGoal,
+  withdrawFromSavingGoal,
 };

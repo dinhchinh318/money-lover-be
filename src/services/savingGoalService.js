@@ -1,10 +1,7 @@
 const SavingGoal = require("../models/savingGoal");
 const Wallet = require("../models/wallet");
-
-/**
- * Create saving goal
- * current_amount = wallet.balance (KHÔNG LƯU DB)
- */
+const { createTransaction } = require("./transactionService");
+const Category = require("../models/category");
 const createSavingGoal = async (userId, data) => {
   try {
     const { name, walletId, target_amount, target_date, description } = data;
@@ -33,9 +30,11 @@ const createSavingGoal = async (userId, data) => {
       name,
       wallet: walletId,
       target_amount: Number(target_amount),
+      current_amount: 0,          // 👈 CHỈ DÒNG NÀY
       target_date: target_date ? new Date(target_date) : null,
       description: description || "",
       is_active: true,
+      is_completed: false
     });
 
     return {
@@ -53,25 +52,96 @@ const createSavingGoal = async (userId, data) => {
     };
   }
 };
-
-/**
- * Calculate progress from wallet balance
- */
-const mapSavingGoalWithProgress = (goal) => {
-  if (goal.is_completed) {
-    return {
-      ...goal.toObject(),
-      current_amount: goal.target_amount,
-      progress: 100
-    };
+const depositToSavingGoal = async (userId, goalId, amount) => {
+  if (!amount || amount <= 0) {
+    throw new Error("Amount must be greater than 0");
   }
-  const walletBalance = goal.wallet?.balance || 0;
+
+  const goal = await SavingGoal.findOne({ _id: goalId, userId });
+  if (!goal) throw new Error("SavingGoal not found");
+
+  // ✅ 1️⃣ LẤY CATEGORY EXPENSE
+  const categoryId = await getOtherCategoryId(userId, "expense");
+
+  // ✅ 2️⃣ TẠO TRANSACTION
+  const txResult = await createTransaction(userId, {
+    walletId: goal.wallet,
+    amount,
+    type: "expense",
+    categoryId,
+    note: `Thêm tiền vào mục tiêu: ${goal.name}`,
+    ref_id: goal._id,
+  });
+
+  if (!txResult.status) {
+    throw new Error(txResult.message || "Create transaction failed");
+  }
+
+  // ✅ 3️⃣ UPDATE GOAL
+  goal.current_amount += amount;
+
+  if (goal.current_amount >= goal.target_amount) {
+    goal.is_completed = true;
+    goal.is_active = false;
+  }
+
+  await goal.save();
+
+  return goal;
+};
+
+
+const withdrawFromSavingGoal = async (userId, goalId, amount) => {
+  if (!amount || amount <= 0) {
+    throw new Error("Amount must be greater than 0");
+  }
+
+  const goal = await SavingGoal.findOne({ _id: goalId, userId });
+  if (!goal) throw new Error("SavingGoal not found");
+
+  if (goal.current_amount < amount) {
+    throw new Error("SavingGoal balance not enough");
+  }
+
+  // ✅ 1️⃣ LẤY CATEGORY INCOME
+  const categoryId = await getOtherCategoryId(userId, "income");
+
+  // ✅ 2️⃣ TRANSACTION
+  const txResult = await createTransaction(userId, {
+    walletId: goal.wallet,
+    amount,
+    type: "income",
+    categoryId,
+    note: `Rút tiền từ mục tiêu: ${goal.name}`,
+    ref_id: goal._id,
+  });
+
+  if (!txResult.status) {
+    throw new Error(txResult.message || "Create transaction failed");
+  }
+
+  // ✅ 3️⃣ UPDATE GOAL
+  goal.current_amount -= amount;
+
+  if (goal.current_amount < goal.target_amount) {
+    goal.is_completed = false;
+    goal.is_active = true;
+  }
+
+  await goal.save();
+
+  return goal;
+};
+
+
+const mapSavingGoalWithProgress = (goal) => {
+  const current = goal.current_amount || 0;
   const target = goal.target_amount || 0;
 
   return {
     ...goal.toObject(),
-    current_amount: walletBalance,
-    progress: target > 0 ? Math.min((walletBalance / target) * 100, 100) : 0,
+    progress:
+      target > 0 ? Math.min((current / target) * 100, 100) : 0,
   };
 };
 
@@ -132,6 +202,19 @@ const getSavingGoalById = async (userId, id) => {
       data: null,
     };
   }
+};
+const getOtherCategoryId = async (userId, type) => {
+  const category = await Category.findOne({
+    userId,
+    name: "Khác",
+    type,
+  });
+
+  if (!category) {
+    throw new Error(`Category 'Khác' (${type}) not found`);
+  }
+
+  return category._id;
 };
 
 const updateSavingGoal = async (userId, id, data) => {
@@ -240,4 +323,6 @@ module.exports = {
   updateSavingGoal,
   deleteSavingGoal,
   completeSavingGoal,
+  depositToSavingGoal,
+  withdrawFromSavingGoal,
 };

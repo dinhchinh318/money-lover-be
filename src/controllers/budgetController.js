@@ -5,6 +5,8 @@ const {
   getBudgetById,
   updateBudget,
   deleteBudget,
+  getBudgetTransactions,
+  getBudgetStatistics,
 } = require("../services/budgetService");
 
 const createBudgetAPI = async (req, res) => {
@@ -101,6 +103,38 @@ const deleteBudgetAPI = async (req, res) => {
     });
   }
 };
+const getBudgetTransactionsAPI = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const id = req.params.id;
+
+    const result = await getBudgetTransactions(id, userId);
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({
+      status: false,
+      error: -1,
+      message: err.message,
+      data: null,
+    });
+  }
+};
+const getBudgetStatisticsAPI = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const id = req.params.id;
+
+    const result = await getBudgetStatistics(id, userId);
+    return res.status(200).json(result);
+  } catch (err) {
+    return res.status(500).json({
+      status: false,
+      error: -1,
+      message: err.message,
+      data: null,
+    });
+  }
+};
 
 module.exports = {
   createBudgetAPI,
@@ -108,4 +142,6 @@ module.exports = {
   getBudgetByIdAPI,
   updateBudgetAPI,
   deleteBudgetAPI,
+  getBudgetTransactionsAPI,
+  getBudgetStatisticsAPI,
 };

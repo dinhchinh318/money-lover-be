@@ -10,6 +10,8 @@ router.get("/:id", verifyToken, recurringBillController.getRecurringBillByIdAPI)
 router.put("/:id", verifyToken, recurringBillController.updateRecurringBillAPI);
 router.delete("/:id", verifyToken, recurringBillController.deleteRecurringBillAPI);
 router.post("/:id/pay", verifyToken, recurringBillController.payRecurringBillAPI);
+router.patch("/:id/pause", verifyToken, recurringBillController.pauseRecurringBillAPI);
+router.patch("/:id/resume", verifyToken, recurringBillController.resumeRecurringBillAPI);
 
 module.exports = router;
 

@@ -109,6 +109,58 @@ const createBudget = async (userId, data) => {
     };
   }
 };
+const getBudgetTransactions = async (budgetId, userId) => {
+  try {
+    const budget = await Budget.findOne({ _id: budgetId, userId }).lean();
+    if (!budget) {
+      return {
+        status: false,
+        error: 1,
+        message: "Budget not found",
+        data: null,
+      };
+    }
+
+    const query = {
+      userId,
+      type: "expense",
+      categoryId: budget.category,
+    };
+
+    if (budget.wallet) {
+      query.walletId = budget.wallet;
+    }
+
+    if (budget.start_date || budget.end_date) {
+      query.date = {};
+      if (budget.start_date) {
+        query.date.$gte = new Date(budget.start_date);
+      }
+      if (budget.end_date) {
+        query.date.$lte = new Date(budget.end_date);
+      }
+    }
+
+    const transactions = await Transaction
+      .find(query)
+      .sort({ date: -1 })
+      .lean();
+
+    return {
+      status: true,
+      error: 0,
+      message: "Fetched successfully",
+      data: transactions,
+    };
+  } catch (error) {
+    return {
+      status: false,
+      error: -1,
+      message: error.message,
+      data: null,
+    };
+  }
+};
 
 // Helper: Tính tổng chi tiêu cho một budget
 const calculateSpentAmount = async (budget) => {
@@ -460,6 +512,81 @@ const deleteBudget = async (budgetId, userId) => {
     };
   }
 };
+const getBudgetStatistics = async (budgetId, userId) => {
+  try {
+    const budget = await Budget.findOne({ _id: budgetId, userId }).lean();
+    if (!budget) {
+      return {
+        status: false,
+        error: 1,
+        message: "Budget not found",
+        data: null,
+      };
+    }
+
+    // reuse logic cũ
+    const spent = await calculateSpentAmount(budget);
+    const limit = budget.limit_amount || 0;
+
+    const percent = limit > 0
+      ? Math.min(100, Math.round((spent / limit) * 100))
+      : 0;
+
+    const remaining = Math.max(0, limit - spent);
+
+    // group theo ngày
+    const matchQuery = {
+      userId,
+      type: "expense",
+      categoryId: budget.category,
+    };
+
+    if (budget.wallet) {
+      matchQuery.walletId = budget.wallet;
+    }
+
+    if (budget.start_date || budget.end_date) {
+      matchQuery.date = {};
+      if (budget.start_date) matchQuery.date.$gte = budget.start_date;
+      if (budget.end_date) matchQuery.date.$lte = budget.end_date;
+    }
+
+    const byDate = await Transaction.aggregate([
+      { $match: matchQuery },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$date" },
+          },
+          amount: { $sum: "$amount" },
+        },
+      },
+      { $sort: { _id: 1 } },
+    ]);
+
+    return {
+      status: true,
+      error: 0,
+      data: {
+        limit,
+        spent,
+        remaining,
+        percent,
+        byDate: byDate.map(i => ({
+          date: i._id,
+          amount: i.amount,
+        })),
+      },
+    };
+  } catch (error) {
+    return {
+      status: false,
+      error: -1,
+      message: error.message,
+      data: null,
+    };
+  }
+};
 
 module.exports = {
   createBudget,
@@ -467,4 +594,6 @@ module.exports = {
   getBudgetById,
   updateBudget,
   deleteBudget,
+  getBudgetTransactions,
+  getBudgetStatistics,
 };

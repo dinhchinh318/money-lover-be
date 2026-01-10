@@ -5,8 +5,9 @@ const {
     getSavingGoalById,
     updateSavingGoal,
     deleteSavingGoal,
-    addAmount,
-    withdrawAmount,
+    completeSavingGoal,
+    depositToSavingGoal,
+    withdrawFromSavingGoal,
 } = require("../services/savingGoalService");
 
 const createSavingGoalAPI = async (req, res) => {
@@ -94,60 +95,72 @@ const deleteSavingGoalAPI = async (req, res) => {
         });
     }
 };
+const completeSavingGoalAPI = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { id } = req.params;
 
-const addAmountAPI = async (req, res) => {
-    try {
-        const userId = req.user._id || req.user.id;
-        const { id } = req.params;
-        const { amount } = req.body;
+    const result = await completeSavingGoal(userId, id);
 
-        if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-            return res.status(400).json({
-                status: false,
-                error: 1,
-                message: "Invalid amount",
-                data: null,
-            });
-        }
-
-        const result = await addAmount(userId, id, amount);
-        return res.status(result.status ? 200 : 400).json(result);
-    } catch (err) {
-        return res.status(500).json({
-            status: false,
-            error: -1,
-            message: err.message || "Server error",
-            data: null,
-        });
-    }
+    return res.json({
+      status: true,
+      data: result
+    });
+  } catch (err) {
+    return res.status(400).json({
+      status: false,
+      message: err.message
+    });
+  }
 };
 
-const withdrawAmountAPI = async (req, res) => {
-    try {
-        const userId = req.user._id || req.user.id;
-        const { id } = req.params;
-        const { amount } = req.body;
+const depositSavingGoalAPI = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const { id } = req.params;
+    const { amount } = req.body;
 
-        if (!amount || isNaN(Number(amount)) || Number(amount) <= 0) {
-            return res.status(400).json({
-                status: false,
-                error: 1,
-                message: "Invalid amount",
-                data: null,
-            });
-        }
+    const result = await depositToSavingGoal(
+      userId,
+      id,
+      Number(amount)
+    );
 
-        const result = await withdrawAmount(userId, id, amount);
-        return res.status(result.status ? 200 : 400).json(result);
-    } catch (err) {
-        return res.status(500).json({
-            status: false,
-            error: -1,
-            message: err.message || "Server error",
-            data: null,
-        });
-    }
+    return res.json({
+      status: true,
+      data: result
+    });
+  } catch (err) {
+    return res.status(400).json({
+      status: false,
+      message: err.message
+    });
+  }
 };
+const withdrawSavingGoalAPI = async (req, res) => {
+  try {
+    const userId = req.user._id || req.user.id;
+    const { id } = req.params;
+    const { amount } = req.body;
+
+    const result = await withdrawFromSavingGoal(
+      userId,
+      id,
+      Number(amount)
+    );
+
+    return res.json({
+      status: true,
+      data: result
+    });
+  } catch (err) {
+    return res.status(400).json({
+      status: false,
+      message: err.message
+    });
+  }
+};
+
 
 module.exports = {
     createSavingGoalAPI,
@@ -155,8 +168,9 @@ module.exports = {
     getSavingGoalByIdAPI,
     updateSavingGoalAPI,
     deleteSavingGoalAPI,
-    addAmountAPI,
-    withdrawAmountAPI,
+    completeSavingGoalAPI,
+    depositSavingGoalAPI,
+    withdrawSavingGoalAPI,
 };
 
 

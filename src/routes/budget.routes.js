@@ -9,5 +9,7 @@ router.get("/", verifyToken, budgetController.getAllBudgetsAPI);
 router.get("/:id", verifyToken, budgetController.getBudgetByIdAPI);
 router.put("/:id", verifyToken, budgetController.updateBudgetAPI);
 router.delete("/:id", verifyToken, budgetController.deleteBudgetAPI);
+router.get("/:id/transactions", verifyToken, budgetController.getBudgetTransactionsAPI);
+router.get("/:id/statistics", verifyToken, budgetController.getBudgetStatisticsAPI);
 
 module.exports = router;

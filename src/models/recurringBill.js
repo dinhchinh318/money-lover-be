@@ -88,6 +88,11 @@ const recurringBillSchema = new mongoose.Schema(
         message: "ends_at phải lớn hơn hoặc bằng next_run"
       }
     },
+    last_paid_at: {
+      type: Date,
+      default: null,
+    },
+
     active: {
       type: Boolean,
       default: true

@@ -8,6 +8,7 @@
     "dev": "nodemon src/server.js",
     "seed": "node src/scripts/seedData.js",
     "seed:clear": "node src/scripts/seedData.js --clear",
+    "seed:student-adult": "node src/scripts/seedStudentAdult.js",
     "seed:analytics": "node scripts/seedAnalyticsData.js",
     "test:analytics": "node scripts/testAnalytics.js"
   },

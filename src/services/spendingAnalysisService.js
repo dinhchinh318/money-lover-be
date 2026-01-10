@@ -71,7 +71,6 @@ class SpendingAnalysisService {
       return analysis;
 
     } catch (error) {
-      console.error('Spending Analysis Error:', error);
       throw error;
     }
   }
@@ -276,7 +275,6 @@ class SpendingAnalysisService {
       return analysis;
 
     } catch (error) {
-      console.error('Forecast Error:', error);
       throw error;
     }
   }
@@ -306,7 +304,6 @@ class SpendingAnalysisService {
       return recentAnalysis;
 
     } catch (error) {
-      console.error('Get Insights Error:', error);
       throw error;
     }
   }

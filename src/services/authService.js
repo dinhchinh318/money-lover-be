@@ -33,7 +33,7 @@ const register = async (userData) => {
         const emailResult = await sendWelcomeEmail(user.email, user.name);
 
         if (!emailResult.status) {
-            console.log("Lỗi gửi email chào mừng:", emailResult.message);
+            // Email welcome failed
         }
 
         const accessToken = generateToken(user._id);
@@ -228,7 +228,7 @@ const forgotPassword = async (email) => {
             data: null
         }
     } catch (error) {
-        console.log(error);
+        console.error(error);
         return {
             status: false,
             error: -1,
@@ -264,7 +264,7 @@ const verifyOTP = async (email, otp) => {
             data: null
         }
     } catch (error) {
-        console.log(error);
+        console.error(error);
         return {
             status: false,
             error: -1,
@@ -295,7 +295,7 @@ const resetPassword = async (email, newPassword) => {
             data: null
         }
     } catch (error) {
-        console.log(error);
+        console.error(error);
         return {
             status: false,
             error: -1,
@@ -434,7 +434,6 @@ const loginWithGoogle = async (googleProfile) => {
             refreshToken,
         };
     } catch (error) {
-        console.error("Google login error:", error);
         return {
             status: false,
             error: -1,

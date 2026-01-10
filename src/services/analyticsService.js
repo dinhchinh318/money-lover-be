@@ -770,9 +770,6 @@ const getMostFrequentCategories = async (userId, options = {}) => {
       startDate.setDate(endDate.getDate() - days);
     }
 
-    console.log(`[DANH MỤC PHÁT SINH NHIỀU NHẤT] userId: ${userIdObj}`);
-    console.log(`[DANH MỤC PHÁT SINH NHIỀU NHẤT] startDate: ${startDate}, endDate: ${endDate}`);
-
     const stats = await Transaction.aggregate([
       {
         $match: {
@@ -816,11 +813,6 @@ const getMostFrequentCategories = async (userId, options = {}) => {
       { $sort: { count: -1 } }, // Sắp xếp theo số lượng giao dịch giảm dần
     ]);
 
-    console.log(`[DANH MỤC PHÁT SINH NHIỀU NHẤT] Tìm thấy ${stats.length} danh mục`);
-    stats.forEach((stat, idx) => {
-      console.log(`[DANH MỤC PHÁT SINH NHIỀU NHẤT] ${idx + 1}. ${stat.categoryName}: ${stat.count} giao dịch, ${stat.totalAmount.toLocaleString('vi-VN')} VND`);
-    });
-
     return {
       status: true,
       error: 0,
@@ -856,9 +848,6 @@ const getTransactionFrequency = async (userId, options = {}) => {
       startDate.setDate(endDate.getDate() - days);
     }
 
-    console.log(`[TẦN SUẤT GIAO DỊCH] userId: ${userId}`);
-    console.log(`[TẦN SUẤT GIAO DỊCH] startDate: ${startDate}, endDate: ${endDate}`);
-
     // Đảm bảo userId là ObjectId
     const userIdObj = mongoose.Types.ObjectId.isValid(userId)
       ? new mongoose.Types.ObjectId(userId)
@@ -880,33 +869,14 @@ const getTransactionFrequency = async (userId, options = {}) => {
       },
     ]);
 
-    console.log(`[TẦN SUẤT GIAO DỊCH] Stats từ aggregation:`, stats);
-
     // Kiểm tra tổng số transactions
     const totalTransactions = stats.reduce((sum, s) => sum + s.count, 0);
-    console.log(`[TẦN SUẤT GIAO DỊCH] Total transactions: ${totalTransactions}`);
-
-    // Nếu không có transactions, kiểm tra xem có transactions nào trong DB không
-    if (totalTransactions === 0) {
-      const allTransactionsCount = await Transaction.countDocuments({ userId: userIdObj });
-      console.log(`[TẦN SUẤT GIAO DỊCH] Tổng số transactions trong DB: ${allTransactionsCount}`);
-
-      // Lấy một vài transactions mẫu để xem date range
-      const sampleTransactions = await Transaction.find({ userId: userIdObj })
-        .sort({ date: -1 })
-        .limit(5)
-        .select("date type amount")
-        .lean();
-      console.log(`[TẦN SUẤT GIAO DỊCH] Sample transactions:`, sampleTransactions);
-    }
 
     // Tính số ngày thực tế trong khoảng thời gian
     const actualDays = Math.max(1, Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)));
     const avgPerDay = actualDays > 0 ? totalTransactions / actualDays : 0;
     const avgPerWeek = avgPerDay * 7;
     const avgPerMonth = avgPerDay * 30;
-
-    console.log(`[TẦN SUẤT GIAO DỊCH] Frequency - perDay: ${avgPerDay}, perWeek: ${avgPerWeek}, perMonth: ${avgPerMonth}`);
 
     return {
       status: true,
@@ -928,7 +898,7 @@ const getTransactionFrequency = async (userId, options = {}) => {
       },
     };
   } catch (error) {
-    console.error(`[TẦN SUẤT GIAO DỊCH] Error:`, error);
+      console.error(`[TẦN SUẤT GIAO DỊCH] Error:`, error);
     return {
       status: false,
       error: -1,
@@ -1367,7 +1337,7 @@ const predictBudgetOverrun = async (userId) => {
     for (const budget of budgets) {
       // Đảm bảo category._id tồn tại
       if (!budget.category || !budget.category._id) {
-        console.warn(`Budget ${budget._id} không có category hợp lệ`);
+        // Skip budget without valid category
         continue;
       }
 
@@ -1416,61 +1386,6 @@ const predictBudgetOverrun = async (userId) => {
       const spent = spentStats[0]?.totalAmount || 0;
       const transactionCount = spentStats[0]?.count || 0;
 
-      // Debug log chi tiết để kiểm tra
-      console.log("=".repeat(80));
-      console.log(`[BUDGET OVERRUN DEBUG] Budget: ${budget.name || budget.category.name}`);
-      console.log(`  📋 Budget Info:`);
-      console.log(`     - BudgetId: ${budget._id}`);
-      console.log(`     - CategoryId (raw): ${budget.category._id} (${typeof budget.category._id})`);
-      console.log(`     - CategoryId (converted): ${categoryIdObj} (${typeof categoryIdObj})`);
-      console.log(`     - CategoryName: ${budget.category.name}`);
-      console.log(`     - WalletId (raw): ${budget.wallet || 'null (all wallets)'}`);
-      if (budget.wallet) {
-        console.log(`     - WalletId (converted): ${matchQuery.walletId}`);
-      }
-      console.log(`     - Limit: ${budget.limit_amount.toLocaleString('vi-VN')} VND`);
-      console.log(`  🔍 Match Query:`);
-      console.log(`     - userId: ${userIdObj} (${typeof userIdObj})`);
-      console.log(`     - type: ${matchQuery.type}`);
-      console.log(`     - categoryId: ${categoryIdObj} (${typeof categoryIdObj})`);
-      console.log(`     - date range: ${currentMonthStart.toISOString()} to ${now.toISOString()}`);
-      if (matchQuery.walletId) {
-        console.log(`     - walletId: ${matchQuery.walletId} (${typeof matchQuery.walletId})`);
-      }
-      console.log(`  📊 Results:`);
-      console.log(`     - Transactions found: ${transactionCount}`);
-      console.log(`     - Total spent: ${spent.toLocaleString('vi-VN')} VND`);
-      if (allMatchingTransactions.length > 0) {
-        console.log(`  💰 Sample transactions (first 3):`);
-        allMatchingTransactions.slice(0, 3).forEach((t, idx) => {
-          console.log(`     ${idx + 1}. Date: ${t.date.toISOString()}, Amount: ${t.amount.toLocaleString('vi-VN')} VND, Wallet: ${t.walletId}, Category: ${t.categoryId}`);
-        });
-      } else {
-        console.log(`  ⚠️  No transactions found! Checking why...`);
-        // Kiểm tra xem có transactions nào của category này không (không filter date)
-        const categoryTransactions = await Transaction.find({
-          userId: userIdObj,
-          type: "expense",
-          categoryId: budget.category._id,
-        }).limit(5).lean();
-        console.log(`     - Total transactions for this category (all time): ${categoryTransactions.length}`);
-        if (categoryTransactions.length > 0) {
-          console.log(`     - Sample transaction dates:`, categoryTransactions.map(t => t.date.toISOString()));
-          console.log(`     - Current month start: ${currentMonthStart.toISOString()}`);
-          console.log(`     - Now: ${now.toISOString()}`);
-        }
-        // Kiểm tra xem có transactions nào trong tháng này không (không filter category)
-        const monthTransactions = await Transaction.find({
-          userId: userIdObj,
-          type: "expense",
-          date: { $gte: currentMonthStart, $lte: now },
-        }).limit(5).lean();
-        console.log(`     - Total expense transactions this month (all categories): ${monthTransactions.length}`);
-        if (monthTransactions.length > 0) {
-          console.log(`     - Sample categoryIds:`, monthTransactions.map(t => t.categoryId?.toString()));
-        }
-      }
-      console.log("=".repeat(80));
       const limit = budget.limit_amount;
       const remaining = limit - spent;
       const usagePercent = (spent / limit) * 100;
@@ -1603,16 +1518,6 @@ const predictCategorySpending = async (userId, options = {}) => {
     ]);
 
     // Nhóm theo category và tính xu hướng
-    console.log(`[DỰ ĐOÁN DANH MỤC] Số lượng weekly stats: ${weeklyCategoryStats.length}`);
-    if (weeklyCategoryStats.length > 0) {
-      console.log(`[DỰ ĐOÁN DANH MỤC] Sample weekly stat:`, {
-        categoryId: weeklyCategoryStats[0]._id?.categoryId,
-        categoryName: weeklyCategoryStats[0].category?.name,
-        totalAmount: weeklyCategoryStats[0].totalAmount,
-        year: weeklyCategoryStats[0]._id?.year,
-        week: weeklyCategoryStats[0]._id?.week,
-      });
-    }
 
     const categoryMap = {};
     weeklyCategoryStats.forEach((stat) => {
@@ -1628,14 +1533,6 @@ const predictCategorySpending = async (userId, options = {}) => {
       categoryMap[catId].weeklyAmounts.push(stat.totalAmount);
     });
 
-    console.log(`[DỰ ĐOÁN DANH MỤC] Số category có dữ liệu: ${Object.keys(categoryMap).length}`);
-    Object.keys(categoryMap).forEach((catId) => {
-      console.log(`[DỰ ĐOÁN DANH MỤC] Category ${catId}:`, {
-        name: categoryMap[catId].categoryName,
-        weeklyAmounts: categoryMap[catId].weeklyAmounts,
-        weeklyAmountsLength: categoryMap[catId].weeklyAmounts.length,
-      });
-    });
 
     // Dự đoán cho tuần tới
     const predictions = Object.values(categoryMap).map((cat) => {
@@ -1723,9 +1620,6 @@ const suggestOptimizeSpending = async (userId, options = {}) => {
     // Đảm bảo userId là ObjectId
     const userIdObj = typeof userId === 'string' ? new mongoose.Types.ObjectId(userId) : userId;
 
-    console.log(`[suggestOptimizeSpending] userId: ${userId} (${typeof userId}), userIdObj: ${userIdObj}, days: ${days}, thresholdPercent: ${thresholdPercent}`);
-    console.log(`[suggestOptimizeSpending] Date range: ${startDate.toISOString()} to ${now.toISOString()}`);
-
     // Lấy chi tiêu theo danh mục trong khoảng thời gian
     const categoryStats = await Transaction.aggregate([
       {
@@ -1764,14 +1658,6 @@ const suggestOptimizeSpending = async (userId, options = {}) => {
       { $sort: { totalAmount: -1 } },
     ]);
 
-    console.log(`[suggestOptimizeSpending] Found ${categoryStats.length} categories with expenses`);
-    if (categoryStats.length > 0) {
-      console.log(`[suggestOptimizeSpending] Category stats:`, categoryStats.map(c => ({
-        name: c.categoryName,
-        totalAmount: c.totalAmount,
-        count: c.count
-      })));
-    }
 
     if (categoryStats.length === 0) {
       return {
@@ -1790,7 +1676,6 @@ const suggestOptimizeSpending = async (userId, options = {}) => {
     const totalExpense = categoryStats.reduce((sum, cat) => sum + cat.totalAmount, 0);
 
     if (totalExpense === 0) {
-      console.log(`[suggestOptimizeSpending] Total expense is 0, no suggestions`);
       return {
         status: true,
         error: 0,
@@ -1823,8 +1708,6 @@ const suggestOptimizeSpending = async (userId, options = {}) => {
       return percentage >= effectiveThreshold;
     });
 
-    console.log(`[suggestOptimizeSpending] Total expense: ${totalExpense}, Threshold: ${effectiveThreshold}%`);
-    console.log(`[suggestOptimizeSpending] Filtered ${filteredCategories.length} categories (from ${categoryStats.length})`);
 
     // Tính toán suggestions với async operations
     const suggestions = await Promise.all(
@@ -1938,9 +1821,6 @@ const suggestBudgetAdjustment = async (userId) => {
     const last3MonthsStart = new Date(now);
     last3MonthsStart.setMonth(now.getMonth() - 3);
 
-    console.log(`[suggestBudgetAdjustment] userId: ${userId} (${typeof userId}), userIdObj: ${userIdObj}`);
-    console.log(`[suggestBudgetAdjustment] Date range: ${last3MonthsStart.toISOString()} to ${now.toISOString()}`);
-
     // Lấy tất cả budgets
     const budgets = await Budget.find({
       userId: userIdObj,
@@ -1949,7 +1829,6 @@ const suggestBudgetAdjustment = async (userId) => {
       .populate("category", "name icon")
       .lean();
 
-    console.log(`[suggestBudgetAdjustment] Found ${budgets.length} monthly budgets`);
 
     const suggestions = [];
 
@@ -2059,12 +1938,9 @@ const suggestBudgetAdjustment = async (userId) => {
           },
           priority: overrunRate >= 50 ? "high" : avgMonthlySpending > currentLimit ? "medium" : "low",
         });
-      } else {
-        console.log(`[suggestBudgetAdjustment] Budget ${budget._id} (${budget.category?.name}): No transactions in last 3 months`);
       }
     }
 
-    console.log(`[suggestBudgetAdjustment] Generated ${suggestions.length} budget adjustment suggestions`);
 
     return {
       status: true,
@@ -2095,7 +1971,6 @@ const suggestWalletTransfer = async (userId) => {
       : userId;
 
     const wallets = await Wallet.find({ userId: userIdObj, is_archived: false }).lean();
-    console.log(`[suggestWalletTransfer] Found ${wallets.length} wallets for user ${userId}`);
 
     const suggestions = [];
     const lowBalanceWallets = [];
@@ -2107,7 +1982,6 @@ const suggestWalletTransfer = async (userId) => {
 
     // Nếu chỉ có 1 ví thì không có transfer suggestions
     if (wallets.length < 2) {
-      console.log(`[suggestWalletTransfer] Only ${wallets.length} wallet(s), cannot suggest transfers`);
       return {
         status: true,
         error: 0,
@@ -2143,14 +2017,6 @@ const suggestWalletTransfer = async (userId) => {
       }
     }
 
-    console.log(`[suggestWalletTransfer] Low balance wallets: ${lowBalanceWallets.length}, High balance wallets: ${highBalanceWallets.length}`);
-    if (wallets.length > 0) {
-      console.log(`[suggestWalletTransfer] Wallet balances:`, wallets.map(w => ({
-        name: w.name,
-        balance: w.balance,
-        type: w.type
-      })));
-    }
 
     // Thuật toán tối ưu chuyển tiền: Greedy Algorithm
     // Sắp xếp ví thiếu theo mức độ cần thiết (âm số dư > sắp hết)
@@ -2270,8 +2136,6 @@ const suggestWalletTransfer = async (userId) => {
         }
       }
     }
-
-    console.log(`[suggestWalletTransfer] Generated ${suggestions.length} transfer suggestions`);
 
     return {
       status: true,

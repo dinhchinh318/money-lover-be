@@ -100,18 +100,9 @@ const startServer = async () => {
   try {
     await connection();
     app.listen(port, () => {
-      console.log(`App is listening on port: ${port}`);
-      console.log(`Environment: ${process.env.NODE_ENV || "development"}`);
-
-      // Cập nhật: Log trạng thái Gemini
-      if (process.env.GEMINI_API_KEY) {
-        console.log("AI Service: Google Gemini (Configured)");
-      } else {
-        console.log("AI Service: Not configured (Missing GEMINI_API_KEY)");
-      }
+      // Server started successfully
     });
   } catch (error) {
-    console.log("Error starting server:", error);
     process.exit(1);
   }
 };

@@ -43,7 +43,7 @@ const createMultipleUser = async (users) => {
         let data = await User.insertMany(users);
         return data || null;
     } catch (error) {
-        console.log(error);
+        console.error("Error:", error);
         return null;
     }
 }
@@ -53,7 +53,7 @@ const getAUser = async (id) => {
         let data = await User.findById(id);
         return data || null;
     } catch (errror) {
-        console.log(error);
+        console.error(errror);
         return null;
     }
 }
@@ -64,7 +64,7 @@ const getUser = async () => {
         let data = await User.find({});
         return data || null;
     } catch (error) {
-        console.log(error);
+        console.error("Error:", error);
         return null;
     }
 }
@@ -121,7 +121,7 @@ const deleteUser = async (user) => {
         let data = await User.deleteById(id);
         return data || null;
     } catch (error) {
-        console.log(error);
+        console.error("Error:", error);
         return null;
     }
 }
@@ -133,7 +133,7 @@ const deleteMultipleUser = async (arrUser) => {
         let data = await User.delete({ _id: { $in: arrId } });
         return data || null;
     } catch (error) {
-        console.log(error);
+        console.error("Error:", error);
         return null;
     }
 }

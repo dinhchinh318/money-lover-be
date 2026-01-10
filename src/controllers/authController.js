@@ -20,7 +20,6 @@ const registerAPI = async (req, res) => {
         }
         return res.status(200).json(data);
     } catch (error) {
-        console.log(error);
         return res.status(500).json(
             {
                 status: false,
@@ -60,7 +59,6 @@ const loginAPI = async (req, res) => {
         }
         return res.status(200).json(data);
     } catch (error) {
-        console.log(error);
         return res.status(500).json({
             status: false,
             error: -1,
@@ -84,7 +82,6 @@ const refreshAPI = async (req, res) => {
         const data = await authService.refreshAccessToken(refreshToken);
         return res.status(200).json(data);
     } catch (error) {
-        console.log(error);
         return res.status(500).json(
             {
                 status: false,
@@ -101,7 +98,6 @@ const logoutAPI = async (req, res) => {
         res.clearCookie("refreshToken");
         return res.status(200).json(data);
     } catch (error) {
-        console.log(error);
         return res.status(500).json({
             status: false,
             error: -1,
@@ -120,7 +116,6 @@ const getAccountAPI = async (req, res) => {
         const data = await authService.getAccount(req.user._id);
         return res.status(200).json(data);
     } catch (error) {
-        console.log(error);
         return res.status(500).json({
             status: false,
             error: -1,
@@ -155,7 +150,6 @@ const updateAccountAPI = async (req, res) => {
             data: null,
         });
     } catch (error) {
-        console.error("Error updating account:", error);
         return res.status(500).json({
             EC: -1,
             message: error.message || "Server error",
@@ -193,7 +187,6 @@ const changePasswordAPI = async (req, res) => {
             data: null,
         });
     } catch (error) {
-        console.error("Error changing password:", error);
         return res.status(500).json({
             EC: -1,
             message: error.message || "Server error",
@@ -215,7 +208,6 @@ const forgotPasswordAPI = async (req, res) => {
         const data = await authService.forgotPassword(email);
         return res.status(200).json(data);
     } catch (error) {
-        console.log(error);
         return res.status(500).json({
             status: false,
             error: -1,
@@ -238,7 +230,6 @@ const verifyOTPAPI = async (req, res) => {
         const data = await authService.verifyOTP(email, otp);
         return res.status(200).json(data);
     } catch (error) {
-        console.log(error);
         return res.status(500).json(
             {
                 status: false,
@@ -265,7 +256,6 @@ const resetPasswordAPI = async (req, res) => {
         const data = await authService.resetPassword(email, password);
         return res.status(200).json(data);
     } catch (error) {
-        console.log(error);
         return res.status(500).json(
             {
                 status: false,
@@ -307,7 +297,6 @@ const googleLoginAPI = async (req, res) => {
 
         return res.status(200).json(data);
     } catch (error) {
-        console.error("Google login API error:", error);
         return res.status(500).json({
             status: false,
             error: -1,

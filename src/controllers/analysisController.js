@@ -31,7 +31,6 @@ const analysisController = {
       });
 
     } catch (error) {
-      console.error('Analyze Spending Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi phân tích chi tiêu',
@@ -56,7 +55,6 @@ const analysisController = {
       });
 
     } catch (error) {
-      console.error('Get Insights Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi lấy insights',
@@ -85,7 +83,6 @@ const analysisController = {
       });
 
     } catch (error) {
-      console.error('Get Forecast Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi dự đoán chi tiêu',
@@ -129,7 +126,6 @@ const analysisController = {
       });
 
     } catch (error) {
-      console.error('Compare Periods Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi so sánh các khoảng thời gian',
@@ -178,7 +174,6 @@ const analysisController = {
       });
 
     } catch (error) {
-      console.error('Get Analysis History Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi lấy lịch sử phân tích',
@@ -214,7 +209,6 @@ const analysisController = {
       });
 
     } catch (error) {
-      console.error('Get Analysis Detail Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi lấy chi tiết analysis',
@@ -250,7 +244,6 @@ const analysisController = {
       });
 
     } catch (error) {
-      console.error('Delete Analysis Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi xóa analysis',
@@ -283,7 +276,6 @@ const analysisController = {
       });
 
     } catch (error) {
-      console.error('Monthly Quick Analysis Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi tạo phân tích tháng',

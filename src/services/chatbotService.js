@@ -78,7 +78,6 @@ Trả về JSON format:
       };
 
     } catch (error) {
-      console.error('AI Intent Analysis Error:', error);
       throw error;
     }
   }
@@ -124,7 +123,6 @@ Phong cách:
       return result.response.text();
 
     } catch (error) {
-      console.error('AI Chat Response Error:', error);
       throw error;
     }
   }
@@ -192,7 +190,6 @@ Hãy phân tích và đưa ra insights.`;
       };
 
     } catch (error) {
-      console.error('AI Spending Analysis Error:', error);
       throw error;
     }
   }
@@ -247,7 +244,6 @@ Trả về JSON format:
       };
 
     } catch (error) {
-      console.error('AI Forecast Error:', error);
       throw error;
     }
   }
@@ -294,7 +290,6 @@ Trả về JSON format:
       return { anomalies: [], summary: '' };
 
     } catch (error) {
-      console.error('AI Anomaly Detection Error:', error);
       throw error;
     }
   }

@@ -80,7 +80,6 @@ class SpendingAnalysisService {
       return analysis;
 
     } catch (error) {
-      console.error('Spending Analysis Error:', error);
       throw error;
     }
   }
@@ -392,7 +391,6 @@ Trả về JSON format:
       return { forecast: [], method: 'AI prediction', factors: [] };
 
     } catch (error) {
-      console.error('Forecast Error:', error);
       throw error;
     }
   }
@@ -420,7 +418,6 @@ Trả về JSON format:
       return recentAnalysis;
 
     } catch (error) {
-      console.error('Get Insights Error:', error);
       throw error;
     }
   }

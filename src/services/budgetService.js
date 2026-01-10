@@ -239,11 +239,6 @@ const calculateSpentAmount = async (budget) => {
 
     const spentAmount = result.length > 0 ? Number(result[0].totalSpent) : 0;
 
-    console.log(`📊 [calculateSpentAmount] Budget: ${budget.name || budget._id}, Spent: ${spentAmount}`, {
-      matchQuery: JSON.stringify(matchQuery, null, 2),
-      resultCount: result.length,
-    });
-
     return spentAmount;
   } catch (error) {
     console.error("❌ [calculateSpentAmount] Error:", error);

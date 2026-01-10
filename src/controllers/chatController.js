@@ -32,7 +32,6 @@ const chatController = {
       });
 
     } catch (error) {
-      console.error('Send Message Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi xử lý tin nhắn',
@@ -75,7 +74,6 @@ const chatController = {
       });
 
     } catch (error) {
-      console.error('Get Sessions Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi lấy danh sách sessions',
@@ -111,7 +109,6 @@ const chatController = {
       });
 
     } catch (error) {
-      console.error('Get Session Detail Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi lấy chi tiết session',
@@ -168,7 +165,6 @@ const chatController = {
       });
 
     } catch (error) {
-      console.error('Get Chat History Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi lấy lịch sử chat',
@@ -198,7 +194,6 @@ const chatController = {
       });
 
     } catch (error) {
-      console.error('Create Session Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi tạo session mới',
@@ -239,7 +234,6 @@ const chatController = {
       });
 
     } catch (error) {
-      console.error('Update Session Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi cập nhật session',
@@ -279,7 +273,6 @@ const chatController = {
       });
 
     } catch (error) {
-      console.error('Delete Session Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi xóa session',
@@ -317,7 +310,6 @@ const chatController = {
       });
 
     } catch (error) {
-      console.error('Quick Query Error:', error);
       res.status(500).json({
         success: false,
         message: 'Lỗi khi xử lý query',

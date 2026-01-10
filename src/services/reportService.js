@@ -17,15 +17,6 @@ const getPeriodData = async (userId, startDate, endDate) => {
     },
   };
 
-  console.log("🔍 [getPeriodData] Query params:", {
-    userId: userIdObj.toString(),
-    userIdType: typeof userId,
-    startDate: new Date(startDate).toISOString(),
-    endDate: new Date(endDate).toISOString(),
-    startDateLocal: new Date(startDate).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
-    endDateLocal: new Date(endDate).toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
-  });
-
   const stats = await Transaction.aggregate([
     { $match: matchQuery },
     {
@@ -37,25 +28,8 @@ const getPeriodData = async (userId, startDate, endDate) => {
     },
   ]);
 
-  console.log("📊 [getPeriodData] Aggregation results:", JSON.stringify(stats, null, 2));
-
   // Kiểm tra tổng số transaction trong khoảng thời gian
   const totalTransactions = await Transaction.countDocuments(matchQuery);
-  console.log("📈 [getPeriodData] Total transactions found:", totalTransactions);
-
-  // Nếu không có transaction, kiểm tra xem có transaction nào của user này không
-  if (totalTransactions === 0) {
-    const userTotalTransactions = await Transaction.countDocuments({ userId: userIdObj });
-    console.log("⚠️ [getPeriodData] WARNING: No transactions in this period!");
-    console.log("   But user has total transactions:", userTotalTransactions);
-    if (userTotalTransactions > 0) {
-      const sampleTransaction = await Transaction.findOne({ userId: userIdObj });
-      if (sampleTransaction) {
-        console.log("   Sample transaction date:", sampleTransaction.date.toISOString());
-        console.log("   Sample transaction date local:", sampleTransaction.date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }));
-      }
-    }
-  }
 
   let totalIncome = 0;
   let totalExpense = 0;
@@ -72,7 +46,6 @@ const getPeriodData = async (userId, startDate, endDate) => {
     balance: totalIncome - totalExpense,
   };
 
-  console.log("✅ [getPeriodData] Final result:", result);
   return result;
 };
 
@@ -194,13 +167,6 @@ const getFinancialDashboard = async (userId, options = {}) => {
       }
     }
 
-    console.log("📊 [getFinancialDashboard] Query params:", {
-      userId: userIdObj.toString(),
-      startDate: startDate ? new Date(startDate).toISOString() : null,
-      endDate: endDate ? new Date(endDate).toISOString() : null,
-      matchQuery: JSON.stringify(matchQuery, null, 2),
-    });
-
     // Tính tổng thu và tổng chi từ transaction
     // Tổng thu: chỉ tính income (thu nhập thực tế)
     // Tổng chi: chỉ tính expense (chi tiêu thực tế)
@@ -228,11 +194,8 @@ const getFinancialDashboard = async (userId, options = {}) => {
     const expenseStat = stats.find((s) => s._id === "expense");
     if (expenseStat) totalExpense = expenseStat.totalAmount;
 
-    console.log("📊 [getFinancialDashboard] Aggregation results:", JSON.stringify(stats, null, 2));
-
     // Kiểm tra tổng số transaction
     const totalTransactions = await Transaction.countDocuments(matchQuery);
-    console.log("📈 [getFinancialDashboard] Total transactions found:", totalTransactions);
 
     // Tính tổng số dư tất cả ví của user (chỉ tính ví chưa bị archive và chưa xóa)
     const wallets = await Wallet.find({
@@ -275,30 +238,10 @@ const getFinancialDashboard = async (userId, options = {}) => {
         // Tính phần trăm thay đổi
         incomeChangePercent = calculatePercentageChange(totalIncome, previousData.totalIncome);
         expenseChangePercent = calculatePercentageChange(totalExpense, previousData.totalExpense);
-
-        console.log("📊 [getFinancialDashboard] Previous period data:", {
-          previousStartDate: previousStartDate.toISOString(),
-          previousEndDate: previousEndDate.toISOString(),
-          previousIncome: previousData.totalIncome,
-          previousExpense: previousData.totalExpense,
-          incomeChangePercent,
-          expenseChangePercent,
-        });
       } catch (prevError) {
-        console.error("⚠️ [getFinancialDashboard] Error calculating previous period:", prevError);
         // Nếu có lỗi, giữ giá trị mặc định là 0
       }
     }
-
-    console.log("✅ [getFinancialDashboard] Final results:", {
-      totalIncome,
-      totalExpense,
-      totalWalletBalance,
-      balance,
-      walletCount: wallets.length,
-      incomeChangePercent,
-      expenseChangePercent,
-    });
 
     // Kết quả trả về
     const result = {
@@ -339,26 +282,10 @@ const compareCurrentMonthWithPrevious = async (userId) => {
     const currentRange = getCurrentMonthRange();
     const previousRange = getPreviousMonthRange();
 
-    console.log("📅 [compareCurrentMonthWithPrevious] Current month range:", {
-      start: currentRange.startDate.toISOString(),
-      end: currentRange.endDate.toISOString(),
-      startLocal: currentRange.startDate.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
-      endLocal: currentRange.endDate.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
-    });
-    console.log("📅 [compareCurrentMonthWithPrevious] Previous month range:", {
-      start: previousRange.startDate.toISOString(),
-      end: previousRange.endDate.toISOString(),
-      startLocal: previousRange.startDate.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
-      endLocal: previousRange.endDate.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
-    });
-
     const [currentData, previousData] = await Promise.all([
       getPeriodData(userId, currentRange.startDate, currentRange.endDate),
       getPeriodData(userId, previousRange.startDate, previousRange.endDate),
     ]);
-
-    console.log("📊 [compareCurrentMonthWithPrevious] Current data:", currentData);
-    console.log("📊 [compareCurrentMonthWithPrevious] Previous data:", previousData);
 
     const result = {
       current: {
@@ -544,9 +471,6 @@ const getWalletChanges = async (userId, options = {}) => {
       is_archived: false,
     }).lean();
 
-    console.log(`[getWalletChanges] Found ${wallets.length} wallets for user ${userIdObj}`);
-    console.log(`[getWalletChanges] Period: ${periodStart.toISOString()} to ${periodEnd.toISOString()}`);
-
     // Lấy số dư ban đầu (trước khoảng thời gian)
     periodStart.setHours(0, 0, 0, 0);
     const startDateObj = new Date(periodStart);
@@ -654,8 +578,6 @@ const getWalletChanges = async (userId, options = {}) => {
 
     // Sắp xếp theo thay đổi giảm dần
     walletChanges.sort((a, b) => b.change - a.change);
-
-    console.log(`[getWalletChanges] Returning ${walletChanges.length} wallet changes`);
 
     return {
       status: true,
@@ -799,13 +721,6 @@ const getTimeBasedReportByWeek = async (userId, options = {}) => {
     if (walletId && walletId !== "all") matchQuery.walletId = new mongoose.Types.ObjectId(walletId);
     if (categoryId && categoryId !== "all") matchQuery.categoryId = new mongoose.Types.ObjectId(categoryId);
 
-    console.log("📅 [getTimeBasedReportByWeek] Query params:", {
-      userId: userIdObj.toString(),
-      startDate: startDateObj.toISOString(),
-      endDate: endDateObj.toISOString(),
-      matchQuery: JSON.stringify(matchQuery, null, 2),
-    });
-
     const stats = await Transaction.aggregate([
       { $match: matchQuery },
       {
@@ -825,8 +740,6 @@ const getTimeBasedReportByWeek = async (userId, options = {}) => {
       },
       { $sort: { "_id.year": 1, "_id.week": 1 } },
     ]);
-
-    console.log("📊 [getTimeBasedReportByWeek] Aggregation results:", JSON.stringify(stats, null, 2));
 
     // Helper function để tính ngày đầu và cuối tuần từ year và week number (ISO week)
     const getWeekDateRange = (year, week) => {
@@ -882,8 +795,6 @@ const getTimeBasedReportByWeek = async (userId, options = {}) => {
       };
     });
 
-    console.log("✅ [getTimeBasedReportByWeek] Final result:", JSON.stringify(result, null, 2));
-
     return {
       status: true,
       error: 0,
@@ -891,7 +802,6 @@ const getTimeBasedReportByWeek = async (userId, options = {}) => {
       data: result,
     };
   } catch (error) {
-    console.error("❌ [getTimeBasedReportByWeek] Error:", error);
     return {
       status: false,
       error: -1,
@@ -927,17 +837,6 @@ const getTimeBasedReportByMonth = async (userId, options = {}) => {
     const endDateObj = new Date(endDate);
     endDateObj.setHours(23, 59, 59, 999);
 
-    console.log("📅 [getTimeBasedReportByMonth] Query params:", {
-      userId: userIdObj.toString(),
-      startDate: startDateObj.toISOString(),
-      endDate: endDateObj.toISOString(),
-      startDateLocal: startDateObj.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
-      endDateLocal: endDateObj.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
-      type,
-      walletId,
-      categoryId,
-    });
-
     const matchQuery = {
       userId: userIdObj,
       date: {
@@ -949,28 +848,6 @@ const getTimeBasedReportByMonth = async (userId, options = {}) => {
     if (type && type !== "all") matchQuery.type = type;
     if (walletId && walletId !== "all") matchQuery.walletId = new mongoose.Types.ObjectId(walletId);
     if (categoryId && categoryId !== "all") matchQuery.categoryId = new mongoose.Types.ObjectId(categoryId);
-
-    console.log("🔍 [getTimeBasedReportByMonth] Match query:", JSON.stringify(matchQuery, null, 2));
-
-    // Kiểm tra tổng số transaction trong khoảng thời gian
-    const totalTransactions = await Transaction.countDocuments(matchQuery);
-    console.log("📈 [getTimeBasedReportByMonth] Total transactions found:", totalTransactions);
-
-    // Nếu không có transaction, kiểm tra xem có transaction nào của user này không
-    if (totalTransactions === 0) {
-      const userTotalTransactions = await Transaction.countDocuments({ userId: userIdObj });
-      console.log("⚠️ [getTimeBasedReportByMonth] WARNING: No transactions in this period!");
-      console.log("   But user has total transactions:", userTotalTransactions);
-
-      if (userTotalTransactions > 0) {
-        // Lấy một transaction mẫu để xem date format
-        const sampleTransaction = await Transaction.findOne({ userId: userIdObj }).lean();
-        if (sampleTransaction) {
-          console.log("   Sample transaction date:", sampleTransaction.date.toISOString());
-          console.log("   Sample transaction date local:", sampleTransaction.date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }));
-        }
-      }
-    }
 
     const stats = await Transaction.aggregate([
       { $match: matchQuery },
@@ -992,9 +869,6 @@ const getTimeBasedReportByMonth = async (userId, options = {}) => {
       { $sort: { "_id.year": 1, "_id.month": 1 } },
     ]);
 
-    console.log("📊 [getTimeBasedReportByMonth] Aggregation results:", JSON.stringify(stats, null, 2));
-    console.log("📊 [getTimeBasedReportByMonth] Number of months:", stats.length);
-
     const result = stats.map((item) => ({
       year: item._id.year,
       month: item._id.month,
@@ -1004,8 +878,6 @@ const getTimeBasedReportByMonth = async (userId, options = {}) => {
       balance: item.totalIncome - item.totalExpense,
       count: item.count,
     }));
-
-    console.log("✅ [getTimeBasedReportByMonth] Final result:", JSON.stringify(result, null, 2));
 
     return {
       status: true,
@@ -1049,17 +921,6 @@ const getTimeBasedReportByYear = async (userId, options = {}) => {
     const endDateObj = new Date(endDate);
     endDateObj.setHours(23, 59, 59, 999);
 
-    console.log("📅 [getTimeBasedReportByYear] Query params:", {
-      userId: userIdObj.toString(),
-      startDate: startDateObj.toISOString(),
-      endDate: endDateObj.toISOString(),
-      startDateLocal: startDateObj.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
-      endDateLocal: endDateObj.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }),
-      type,
-      walletId,
-      categoryId,
-    });
-
     const matchQuery = {
       userId: userIdObj,
       date: {
@@ -1071,28 +932,6 @@ const getTimeBasedReportByYear = async (userId, options = {}) => {
     if (type && type !== "all") matchQuery.type = type;
     if (walletId && walletId !== "all") matchQuery.walletId = new mongoose.Types.ObjectId(walletId);
     if (categoryId && categoryId !== "all") matchQuery.categoryId = new mongoose.Types.ObjectId(categoryId);
-
-    console.log("🔍 [getTimeBasedReportByYear] Match query:", JSON.stringify(matchQuery, null, 2));
-
-    // Kiểm tra tổng số transaction trong khoảng thời gian
-    const totalTransactions = await Transaction.countDocuments(matchQuery);
-    console.log("📈 [getTimeBasedReportByYear] Total transactions found:", totalTransactions);
-
-    // Nếu không có transaction, kiểm tra xem có transaction nào của user này không
-    if (totalTransactions === 0) {
-      const userTotalTransactions = await Transaction.countDocuments({ userId: userIdObj });
-      console.log("⚠️ [getTimeBasedReportByYear] WARNING: No transactions in this period!");
-      console.log("   But user has total transactions:", userTotalTransactions);
-
-      if (userTotalTransactions > 0) {
-        // Lấy một transaction mẫu để xem date format
-        const sampleTransaction = await Transaction.findOne({ userId: userIdObj }).lean();
-        if (sampleTransaction) {
-          console.log("   Sample transaction date:", sampleTransaction.date.toISOString());
-          console.log("   Sample transaction date local:", sampleTransaction.date.toLocaleString('vi-VN', { timeZone: 'Asia/Ho_Chi_Minh' }));
-        }
-      }
-    }
 
     const stats = await Transaction.aggregate([
       { $match: matchQuery },
@@ -1111,9 +950,6 @@ const getTimeBasedReportByYear = async (userId, options = {}) => {
       { $sort: { _id: 1 } },
     ]);
 
-    console.log("📊 [getTimeBasedReportByYear] Aggregation results:", JSON.stringify(stats, null, 2));
-    console.log("📊 [getTimeBasedReportByYear] Number of years:", stats.length);
-
     const result = stats.map((item) => ({
       year: item._id,
       label: `Năm ${item._id}`,
@@ -1122,8 +958,6 @@ const getTimeBasedReportByYear = async (userId, options = {}) => {
       balance: item.totalIncome - item.totalExpense,
       count: item.count,
     }));
-
-    console.log("✅ [getTimeBasedReportByYear] Final result:", JSON.stringify(result, null, 2));
 
     return {
       status: true,
@@ -1170,13 +1004,6 @@ const getCategoryExpenseReport = async (userId, options = {}) => {
       }
     }
 
-    console.log("📊 [getCategoryExpenseReport] Query params:", {
-      userId: userIdObj.toString(),
-      startDate: startDate ? new Date(startDate).toISOString() : null,
-      endDate: endDate ? new Date(endDate).toISOString() : null,
-      matchQuery: JSON.stringify(matchQuery, null, 2),
-    });
-
     const stats = await Transaction.aggregate([
       { $match: matchQuery },
       {
@@ -1207,13 +1034,6 @@ const getCategoryExpenseReport = async (userId, options = {}) => {
       { $sort: { totalAmount: -1 } },
       ...(limit ? [{ $limit: parseInt(limit) }] : []),
     ]);
-
-    console.log("📊 [getCategoryExpenseReport] Aggregation results:", JSON.stringify(stats, null, 2));
-    console.log("📊 [getCategoryExpenseReport] Number of categories:", stats.length);
-
-    // Kiểm tra tổng số transaction
-    const totalTransactions = await Transaction.countDocuments(matchQuery);
-    console.log("📈 [getCategoryExpenseReport] Total expense transactions found:", totalTransactions);
 
     return {
       status: true,
@@ -1551,28 +1371,6 @@ const getWalletExpenseReport = async (userId, options = {}) => {
       deleted: { $ne: true },
     }).lean();
 
-    console.log("📊 [getWalletExpenseReport] Query params:", {
-      userId: userIdObj.toString(),
-      startDate: startDate ? new Date(startDate).toISOString() : null,
-      endDate: endDate ? new Date(endDate).toISOString() : null,
-      walletsFound: stats.length,
-      totalWallets: totalWallets,
-      activeWallets: activeWallets,
-      archivedWallets: archivedWallets,
-      allWallets: allWallets.map(w => ({
-        id: w._id.toString(),
-        name: w.name,
-        type: w.type,
-        is_archived: w.is_archived,
-        deleted: w.deleted,
-      })),
-      statsWallets: stats.map(s => ({
-        id: s.walletId?.toString(),
-        name: s.walletName,
-        type: s.walletType,
-      })),
-    });
-
     return {
       status: true,
       error: 0,
@@ -1580,7 +1378,6 @@ const getWalletExpenseReport = async (userId, options = {}) => {
       data: stats,
     };
   } catch (error) {
-    console.error("❌ [getWalletExpenseReport] Error:", error);
     return {
       status: false,
       error: -1,

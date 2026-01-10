@@ -290,7 +290,6 @@ Output: {"intent":"ADD_TRANSACTION","confidence":0.98,"extractedData":{"amount":
       };
 
     } catch (error) {
-      console.error('AI Intent Analysis Error:', error);
       throw error;
     }
   }
@@ -338,7 +337,6 @@ Phong cách:
       return result.response.text();
 
     } catch (error) {
-      console.error('AI Chat Response Error:', error);
       throw error;
     }
   }
@@ -406,7 +404,6 @@ Hãy phân tích và đưa ra insights.`;
       };
 
     } catch (error) {
-      console.error('AI Spending Analysis Error:', error);
       throw error;
     }
   }
@@ -579,9 +576,6 @@ Hãy phân tích và đưa ra insights.`;
     let categoryId = null;
     if (category) {
       const categories = await Category.find({ userId }).lean();
-      const foundCategory = categories.find(c => 
-        c.name.toLowerCase().includes(category.toLowerCase())
-      );
       categoryId = foundCategory?._id;
     }
 

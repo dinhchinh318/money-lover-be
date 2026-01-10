@@ -206,51 +206,10 @@ const startServer = async () => {
   try {
     // Connect to database
     await connection();
-    console.log('✓ Database connected successfully');
-    // 🔥 START RECURRING BILL CRON
-    const { startRecurringBillCron } = require("../scripts/recurringBill.cron");
-    startRecurringBillCron();
-
-    // Start server
     app.listen(port, () => {
-      console.log('\n' + '='.repeat(50));
-      console.log('🚀 Money Lover API Server Started');
-      console.log('='.repeat(50));
-      console.log(`📍 Port: ${port}`);
-      console.log(`🌍 Environment: ${process.env.NODE_ENV || "development"}`);
-      console.log(`🔗 URL: http://localhost:${port}`);
-      console.log(`📚 API Docs: http://localhost:${port}/v1/api`);
-      console.log(`💚 Health Check: http://localhost:${port}/health`);
-      
-      // AI Service status
-      console.log('\n' + '-'.repeat(50));
-      console.log('🤖 AI SERVICE STATUS');
-      console.log('-'.repeat(50));
-      if (process.env.GEMINI_API_KEY) {
-        console.log('✓ Google Gemini: CONFIGURED');
-        console.log(`  Model: ${process.env.GEMINI_MODEL || 'gemini-1.5-flash'}`);
-        console.log(`  Rate Limit: ${process.env.GEMINI_RATE_LIMIT_RPM || 15} requests/minute`);
-        console.log(`  Endpoints:`);
-        console.log(`    - Chat: /v1/api/chat`);
-        console.log(`    - Analysis: /v1/api/analysis`);
-        console.log(`    - AI Suggestions: /v1/api/ai`);
-      } else {
-        console.log('⚠ Google Gemini: NOT CONFIGURED');
-        console.log('  Add GEMINI_API_KEY to .env to enable AI features');
-        console.log('  Get API key: https://aistudio.google.com/app/apikey');
-      }
-      
-      console.log('\n' + '='.repeat(50));
-      console.log('✓ Server is ready to accept connections');
-      console.log('='.repeat(50) + '\n');
+      // Server started successfully
     });
   } catch (error) {
-    console.error('\n' + '='.repeat(50));
-    console.error('❌ ERROR STARTING SERVER');
-    console.error('='.repeat(50));
-    console.error('Error:', error.message);
-    console.error('Stack:', error.stack);
-    console.error('='.repeat(50) + '\n');
     process.exit(1);
   }
 };

@@ -29,23 +29,11 @@ const register = async (userData) => {
       };
     }
 
-    // 1) Tạo user (phục vụ đăng nhập)
-    // - Vẫn có name/avatar ở User để tương thích hệ thống hiện tại (nhưng FE sẽ dùng Profile)
-    const user = new User({
-      name: userData.name || "Người Dùng",
-      email: userData.email,
-      password: userData.password,
-      provider: userData.provider || "local",
-      providerId: userData.providerId || null,
-      role: userData.role || "user",
-      isActive: true,
+    if (!userData.avatar) {
+      userData.avatar = DEFAULT_AVATAR;
+    }
 
-      // giữ avatar ở User như bạn nói
-      avatar: userData.avatar || userData.avatarUrl || DEFAULT_AVATAR,
-      phone: userData.phone || "",
-      address: userData.address || "",
-      description: userData.description || "",
-    });
+    const user = new User(userData);
 
     await user.save(); // ✅ cần _id
 
@@ -54,23 +42,13 @@ const register = async (userData) => {
     if (!profile) {
       profile = await Profile.create({
         userId: user._id,
-        displayName: userData.displayName || userData.name || "Người Dùng",
-        bio: userData.bio || "",
-        avatarUrl: userData.avatarUrl || userData.avatar || DEFAULT_AVATAR,
-        phone: userData.phone || "",
-        address: userData.address || "",
-        dateOfBirth: userData.dateOfBirth ?? null,
-        gender: userData.gender || "unknown",
-        occupation: userData.occupation || "",
-        hasCompletedOnboarding: userData.hasCompletedOnboarding ?? false,
-        favoriteCategories: userData.favoriteCategories || [],
+        displayName: user.name || "Người Dùng",
+        avatarUrl: user.avatar || DEFAULT_AVATAR,
       });
     }
 
-    // 3) Gửi mail (giữ như cũ)
-    sendWelcomeEmail(user.email, profile.displayName).catch((err) =>
-      console.log("Send mail error:", err)
-    );
+    // gửi mail
+    sendWelcomeEmail(user.email, user.name).catch(err => console.error("Send mail error:", err));
 
     // 4) Token + refresh token
     const accessToken = generateToken(user._id);
@@ -294,7 +272,7 @@ const forgotPassword = async (email) => {
             data: null
         }
     } catch (error) {
-        console.log(error);
+        console.error(error);
         return {
             status: false,
             error: -1,
@@ -330,7 +308,7 @@ const verifyOTP = async (email, otp) => {
             data: null
         }
     } catch (error) {
-        console.log(error);
+        console.error(error);
         return {
             status: false,
             error: -1,
@@ -361,7 +339,7 @@ const resetPassword = async (email, newPassword) => {
             data: null
         }
     } catch (error) {
-        console.log(error);
+        console.error(error);
         return {
             status: false,
             error: -1,
@@ -500,7 +478,6 @@ const loginWithGoogle = async (googleProfile) => {
             refreshToken,
         };
     } catch (error) {
-        console.error("Google login error:", error);
         return {
             status: false,
             error: -1,

@@ -1,15 +1,35 @@
+// services/notificationService.js
 const Notification = require("../models/notification");
 
-const createNotification = async (userId, payload) => {
+const createNotification = async (userId, payload = {}) => {
+  const { userId: _ignore, ...safePayload } = payload;
+
   try {
-    const doc = await Notification.create({ userId, ...payload });
+    // ✅ nếu có dedupeKey => upsert để không spam + không race
+    if (safePayload?.dedupeKey) {
+      const doc = await Notification.findOneAndUpdate(
+        { userId, dedupeKey: safePayload.dedupeKey },
+        {
+          $setOnInsert: {
+            ...safePayload,
+            userId,
+          },
+        },
+        { new: true, upsert: true }
+      );
+
+      return { status: true, error: 0, message: "OK", data: doc?.toObject?.() ?? doc };
+    }
+
+    // ✅ không dedupeKey => tạo mới bình thường
+    const doc = await Notification.create({ ...safePayload, userId });
     return { status: true, error: 0, message: "Created successfully", data: doc.toObject() };
   } catch (error) {
     return { status: false, error: -1, message: error.message, data: null };
   }
 };
 
-const getMyNotifications = async (userId, query) => {
+const getMyNotifications = async (userId, query = {}) => {
   try {
     const page = Math.max(parseInt(query.page || "1", 10), 1);
     const limit = Math.min(Math.max(parseInt(query.limit || "20", 10), 1), 100);
@@ -21,8 +41,13 @@ const getMyNotifications = async (userId, query) => {
     if (query.isRead === "false") filter.isRead = false;
     if (query.type) filter.type = query.type;
 
+    // ✅ OPTIONAL: ẩn noti hết hạn (nếu bạn dùng expiresAt nhưng không TTL)
+    if (query.hideExpired === "true") {
+      filter.$or = [{ expiresAt: null }, { expiresAt: { $gt: new Date() } }];
+    }
+
     const [items, total, unreadCount] = await Promise.all([
-      Notification.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Notification.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
       Notification.countDocuments(filter),
       Notification.countDocuments({ userId, isRead: false }),
     ]);
@@ -32,7 +57,7 @@ const getMyNotifications = async (userId, query) => {
       error: 0,
       message: "OK",
       data: {
-        items: items.map((x) => x.toObject()),
+        items,
         pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
         unreadCount,
       },
@@ -44,10 +69,9 @@ const getMyNotifications = async (userId, query) => {
 
 const getNotificationById = async (userId, id) => {
   try {
-    const doc = await Notification.findOne({ _id: id, userId });
+    const doc = await Notification.findOne({ _id: id, userId }).lean();
     if (!doc) return { status: false, error: 1, message: "Notification not found", data: null };
-
-    return { status: true, error: 0, message: "OK", data: doc.toObject() };
+    return { status: true, error: 0, message: "OK", data: doc };
   } catch (error) {
     return { status: false, error: -1, message: error.message, data: null };
   }
@@ -56,13 +80,13 @@ const getNotificationById = async (userId, id) => {
 const markRead = async (userId, id) => {
   try {
     const doc = await Notification.findOneAndUpdate(
-      { _id: id, userId },
+      { _id: id, userId, isRead: false },
       { $set: { isRead: true, readAt: new Date() } },
       { new: true }
-    );
+    ).lean();
 
-    if (!doc) return { status: false, error: 1, message: "Notification not found", data: null };
-    return { status: true, error: 0, message: "Marked as read", data: doc.toObject() };
+    if (!doc) return { status: false, error: 1, message: "Notification not found or already read", data: null };
+    return { status: true, error: 0, message: "Marked as read", data: doc };
   } catch (error) {
     return { status: false, error: -1, message: error.message, data: null };
   }

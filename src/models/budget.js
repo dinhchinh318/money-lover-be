@@ -46,7 +46,20 @@ const budgetSchema = new mongoose.Schema({
   }
 }, { timestamps: true });
 
-budgetSchema.index({ user: 1, category: 1, start_date: -1 });
+budgetSchema.index({ userId: 1, category: 1, wallet: 1, period: 1, start_date: -1 });
+
+budgetSchema.pre("save", function (next) {
+  if (this.period === "custom") {
+    if (!this.start_date || !this.end_date) {
+      return next(new Error("Budget period=custom phải có start_date và end_date"));
+    }
+    if (this.start_date > this.end_date) {
+      return next(new Error("start_date phải <= end_date"));
+    }
+  }
+  next();
+});
+
 
 budgetSchema.plugin(mongooseDelete, {
   deletedAt: true,

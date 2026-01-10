@@ -1,6 +1,7 @@
 const category = require("../models/category");
 const Category = require("../models/category");
 const wallet = require("../models/wallet");
+const defaultCategories = require("../data/defaultCategories");
 
 const createCategory = async (userId, categoryData) => {
   try {
@@ -206,6 +207,16 @@ const setDefaultCategory = async (categoryId, userId) => {
   }
 }
 
+const seedDefaultCategoriesForUser = async (userId) => {
+  const docs = defaultCategories.map((c) => ({
+    ...c,
+    userId,
+    is_default: true,
+  }));
+
+  await Category.insertMany(docs);
+};
+
 module.exports = {
   createCategory,
   getAllCategories,
@@ -213,4 +224,5 @@ module.exports = {
   updateCategory,
   deleteCategory,
   setDefaultCategory,
+  seedDefaultCategoriesForUser,
 }

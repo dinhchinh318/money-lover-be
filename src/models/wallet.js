@@ -43,7 +43,7 @@ const walletSchema = new mongoose.Schema(
 );
 
 // Không cho trùng tên ví trong cùng 1 user
-walletSchema.index({ user: 1, name: 1 }, { unique: true });
+walletSchema.index({ userId: 1, name: 1 }, { unique: true });
 
 // Soft delete
 walletSchema.plugin(mongoose_delete, {

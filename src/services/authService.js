@@ -1,6 +1,10 @@
 const jwt = require("jsonwebtoken");
 const User = require("../models/user");
+const Profile = require("../models/profile");
 const { sendWelcomeEmail, sendResetPasswordEmail } = require("../utils/emailService");
+const { seedDefaultCategoriesForUser } = require("../services/categoryService");
+
+const DEFAULT_AVATAR = "https://res.cloudinary.com/dijy8yams/image/upload/v1742894461/avatars/lgitn3wbciwcm515y0cb.jpg";
 
 const generateToken = (userId) => {
     return jwt.sign({ id: userId }, process.env.JWT_SECRET, {
@@ -14,105 +18,112 @@ const generateRefreshToken = (userId) => {
 }
 
 const register = async (userData) => {
-    try {
-        const existingEmail = await User.findOne({ email: userData.email });
-        if (existingEmail) {
-            return {
-                status: false,
-                error: 1,
-                message: "Email existing. Please try another!",
-                data: null
-            }
-        }
-        if (!userData.avatar) {
-            userData.avatar = "https://res.cloudinary.com/dijy8yams/image/upload/v1742894461/avatars/lgitn3wbciwcm515y0cb.jpg";
-        }
-        const user = new User(userData);
-        await user.save();
-
-        const emailResult = await sendWelcomeEmail(user.email, user.name);
-
-        if (!emailResult.status) {
-            // Email welcome failed
-        }
-
-        const accessToken = generateToken(user._id);
-        const refreshToken = generateRefreshToken(user._id);
-        user.refreshToken = refreshToken;
-        await user.save();
-
-        const userObj = user.toObject();
-        delete userObj.password;
-        delete userObj.refreshToken;
-        return {
-            status: true,
-            error: 0,
-            message: "Register successfully!",
-            data: {
-                user: userObj,
-                accessToken,
-                refreshToken
-            }
-        };
-    } catch (error) {
-        return {
-            status: false,
-            error: -1,
-            message: error.message,
-            data: null
-        };
+  try {
+    const existingEmail = await User.findOne({ email: userData.email });
+    if (existingEmail) {
+      return { status: false, error: 1, message: "Email existing. Please try another!", data: null };
     }
-}
+
+    if (!userData.avatar) {
+      userData.avatar = DEFAULT_AVATAR;
+    }
+
+    const user = new User(userData);
+
+    // ✅ PHẢI save user trước để có user._id
+    await user.save();
+
+    // ✅ tạo profile (chỉ tạo nếu chưa có)
+    const existedProfile = await Profile.findOne({ userId: user._id });
+    if (!existedProfile) {
+      await Profile.create({
+        userId: user._id,
+        displayName: user.name || "Người Dùng",
+        avatarUrl: user.avatar || DEFAULT_AVATAR,
+      });
+    }
+
+    // gửi mail
+    sendWelcomeEmail(user.email, user.name).catch(err => console.error("Send mail error:", err));
+
+    const accessToken = generateToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    await seedDefaultCategoriesForUser(user._id);
+
+    const userObj = user.toObject();
+    delete userObj.password;
+    delete userObj.refreshToken;
+
+    return {
+      status: true,
+      error: 0,
+      message: "Register successfully!",
+      data: {
+        user: userObj,
+        accessToken,
+        refreshToken,
+      },
+    };
+  } catch (error) {
+    return { status: false, error: -1, message: error.message, data: null };
+  }
+};
+
 const login = async (email, password) => {
-    try {
-        const user = await User.findOne({ email });
+  try {
+    const user = await User.findOne({ email });
 
-        if (!user || !user.isActive) {
-            return {
-                status: false,
-                error: 1,
-                message: "Invalid email or incorrect password!",
-                data: null,
-            };
-        }
-        const isMatch = await user.isPasswordMatch(password);
-        if (!isMatch) {
-            return {
-                status: false,
-                error: 1,
-                message: "Invalid email or incorrect password!",
-                data: null
-            }
-        }
-        const accessToken = generateToken(user._id);
-        const refreshToken = generateRefreshToken(user._id);
-        user.refreshToken = refreshToken;
-        await user.save();
-        return {
-            status: true,
-            error: 0,
-            message: "Login successfully!",
-            data: {
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                avatar: user.avatar,
-                role: user.role,
-                phone: user.phone,
-                address: user.address
-            },
-            accessToken,
-            refreshToken
-        }
-    } catch (error) {
-        return {
-            status: false,
-            error: -1,
-            message: error.message,
-            data: null
-        }
+    if (!user || !user.isActive) {
+      return { status: false, error: 1, message: "Invalid email or incorrect password!", data: null };
     }
-}
+
+    const isMatch = await user.isPasswordMatch(password);
+    if (!isMatch) {
+      return { status: false, error: 1, message: "Invalid email or incorrect password!", data: null };
+    }
+
+    const accessToken = generateToken(user._id);
+    const refreshToken = generateRefreshToken(user._id);
+    user.refreshToken = refreshToken;
+    await user.save();
+
+    let profile = await Profile.findOne({ userId: user._id });
+    if (!profile) {
+        profile = await Profile.create({
+            userId: user._id,
+            displayName: user.name || "Người Dùng",
+            avatarUrl: user.avatar || DEFAULT_AVATAR,
+        });
+    }
+
+
+    return {
+      status: true,
+      error: 0,
+      message: "Login successfully!",
+      data: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: user.avatar,
+        role: user.role,
+        phone: user.phone,
+        address: user.address,
+
+        // ✅ thêm profile cho FE dùng
+        profile: profile || null,
+      },
+      accessToken,
+      refreshToken,
+    };
+  } catch (error) {
+    return { status: false, error: -1, message: error.message, data: null };
+  }
+};
+
 const refreshAccessToken = async (refreshToken) => {
     try {
         const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);

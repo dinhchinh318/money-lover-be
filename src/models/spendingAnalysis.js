@@ -115,8 +115,7 @@ const spendingAnalysisSchema = new mongoose.Schema({
   aiModel: String, // e.g., 'gpt-4', 'claude-sonnet-4'
   processingTime: Number,
   expiresAt: {
-    type: Date,
-    index: true
+    type: Date
   }
 }, {
   timestamps: true

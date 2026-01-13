@@ -16,6 +16,7 @@ const settingRoute = require("./setting.routes");
 const profileRoute = require("./profile.routes");
 const notificationRoute = require("./notification.routes");
 const groupRoute = require("../routes/group.routes");
+const uploadRoute = require("./upload.routes");
 
 // ===== NEW: AI & CHATBOT ROUTES =====
 const aiRoute = require("./ai.routes");
@@ -107,6 +108,7 @@ const initRoute = (app) => {
   app.use("/v1/api/profile", profileRoute);
   app.use("/v1/api/notification", notificationRoute);
   app.use("/v1/api/groups", groupRoute);
+  app.use("/v1/api/upload", uploadRoute);
 
   // ===== NEW: AI & CHATBOT ROUTES (với rate limiter riêng) =====
   app.use("/v1/api/ai", aiLimiter, aiRoute);

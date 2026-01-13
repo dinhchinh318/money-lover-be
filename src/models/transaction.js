@@ -107,7 +107,7 @@ const transactionSchema = new mongoose.Schema(
       index: true,
     },
 
-    // Chỉ bắt buộc cho income/expense (giữ đúng như bạn)
+    // Chỉ bắt buộc cho income/expense
     categoryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Category",

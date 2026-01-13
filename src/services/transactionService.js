@@ -5,7 +5,6 @@ const Category = require("../models/category");
 const Budget = require("../models/budget");
 const mongoose = require("mongoose");
 
-// ✅ Notification
 const { createNotification } = require("./notificationService");
 
 /**
@@ -67,15 +66,11 @@ const revertWalletBalance = async (walletId, toWalletId, amount, type, session, 
   }
 };
 
-// -------------------------
-// ✅ Budget notification helpers (FIXED: populate object + yearly)
-// -------------------------
-
 const toObjectId = (v) => {
   if (!v) return null;
   if (typeof v === "string") return new mongoose.Types.ObjectId(v);
   if (v?._id) return new mongoose.Types.ObjectId(v._id);
-  return v; // ObjectId rồi
+  return v;
 };
 
 const startOfDay = (d) => {
@@ -93,7 +88,6 @@ const computePeriodRange = (budget, refDate) => {
   const period = budget?.period || "monthly";
   const ref = refDate ? new Date(refDate) : new Date();
 
-  // nếu budget có start/end cụ thể => dùng nguyên range đó (custom cũng rơi vào đây)
   if (budget?.start_date || budget?.end_date) {
     const from = budget?.start_date ? startOfDay(budget.start_date) : null;
     const to = budget?.end_date ? endOfDay(budget.end_date) : null;
@@ -102,7 +96,7 @@ const computePeriodRange = (budget, refDate) => {
 
   if (period === "weekly") {
     const d = startOfDay(ref);
-    const day = d.getDay(); // 0..6 (CN..T7)
+    const day = d.getDay();
     const diffToMon = (day === 0 ? -6 : 1) - day;
     d.setDate(d.getDate() + diffToMon);
     const from = startOfDay(d);
@@ -118,7 +112,6 @@ const computePeriodRange = (budget, refDate) => {
     return { from, to };
   }
 
-  // monthly default
   const from = new Date(ref.getFullYear(), ref.getMonth(), 1, 0, 0, 0, 0);
   const to = new Date(ref.getFullYear(), ref.getMonth() + 1, 0, 23, 59, 59, 999);
   return { from, to };
@@ -149,13 +142,10 @@ const calcSpentForBudget = async ({ userId, budget, refDate }) => {
   const match = {
     userId: userIdObj,
     type: "expense",
-    // ✅ FIX: budget.category có thể là object đã populate
     categoryId: toObjectId(budget.category),
   };
 
-  // budget.wallet null => áp dụng cho mọi ví
   if (budget.wallet) {
-    // ✅ FIX: budget.wallet có thể là object đã populate
     match.walletId = toObjectId(budget.wallet);
   }
 
@@ -182,7 +172,7 @@ const notifyBudgetThresholds = async ({ userId, budget, spent, range }) => {
     const percentRaw = (Number(spent) / limit) * 100;
     const percent = Math.floor(percentRaw);
 
-    const periodKey = `${budget?.period || "monthly"}:${rangeKey(range)}`; // ✅ add period
+    const periodKey = `${budget?.period || "monthly"}:${rangeKey(range)}`;
     const expiresAt = estimateExpiresAtFromRange(range);
 
     const budgetName = budget?.name || "Ngân sách";
@@ -237,7 +227,7 @@ const notifyBudgetThresholds = async ({ userId, budget, spent, range }) => {
       });
     }
   } catch (e) {
-    console.error("❌ [notifyBudgetThresholds] Error:", e?.message || e);
+    console.error("[notifyBudgetThresholds] Error:", e?.message || e);
   }
 };
 
@@ -249,7 +239,6 @@ const checkBudgetsAfterExpenseChange = async ({ userId, categoryId, walletId, da
     const catObj = toObjectId(categoryId);
     const wObj = walletId ? toObjectId(walletId) : null;
 
-    // query budgets theo category trước
     const budgets = await Budget.find({ userId: userIdObj, category: catObj })
       .populate("category", "name")
       .populate("wallet", "name")
@@ -278,17 +267,13 @@ const checkBudgetsAfterExpenseChange = async ({ userId, categoryId, walletId, da
       await notifyBudgetThresholds({ userId, budget: b, spent, range });
     }
   } catch (e) {
-    console.error("❌ [checkBudgetsAfterExpenseChange] Error:", e?.message || e);
+    console.error("[checkBudgetsAfterExpenseChange] Error:", e?.message || e);
   }
 };
 
-// helper tránh check trùng (old/new giống nhau)
 const buildExpenseCheckKey = ({ categoryId, walletId, date }) =>
   `${String(categoryId || "")}:${String(walletId || "")}:${date ? new Date(date).toISOString().slice(0, 10) : ""}`;
 
-// -------------------------
-// Create
-// -------------------------
 const createTransaction = async (userId, data) => {
   const session = await mongoose.startSession();
   try {
@@ -381,7 +366,6 @@ const createTransaction = async (userId, data) => {
         .populate("toWalletId", "name type balance")
         .session(session);
 
-      // snapshot để check budgets sau commit
       createdSnapshot = {
         type: transaction.type,
         categoryId: transaction.categoryId,
@@ -390,7 +374,6 @@ const createTransaction = async (userId, data) => {
       };
     });
 
-    // ✅ AFTER COMMIT: check budgets nếu expense
     if (createdSnapshot?.type === "expense" && createdSnapshot.categoryId && createdSnapshot.walletId) {
       await checkBudgetsAfterExpenseChange({
         userId,
@@ -408,9 +391,6 @@ const createTransaction = async (userId, data) => {
   }
 };
 
-// -------------------------
-// Update
-// -------------------------
 const updateTransaction = async (userId, transactionId, data) => {
   const session = await mongoose.startSession();
   try {
@@ -530,7 +510,6 @@ const updateTransaction = async (userId, transactionId, data) => {
       };
     });
 
-    // ✅ AFTER COMMIT: check budgets affected (old + new)
     const keys = new Set();
 
     if (oldSnap?.type === "expense" && oldSnap.categoryId && oldSnap.walletId) {
@@ -592,7 +571,6 @@ const deleteTransaction = async (userId, transactionId) => {
       await transaction.delete({ session });
     });
 
-    // ✅ AFTER COMMIT: budget re-check (optional)
     if (snap?.type === "expense" && snap.categoryId && snap.walletId) {
       await checkBudgetsAfterExpenseChange({
         userId,
@@ -642,7 +620,6 @@ const restoreTransaction = async (userId, transactionId) => {
       };
     });
 
-    // ✅ AFTER COMMIT: budget re-check
     if (snap?.type === "expense" && snap.categoryId && snap.walletId) {
       await checkBudgetsAfterExpenseChange({
         userId,
@@ -660,9 +637,6 @@ const restoreTransaction = async (userId, transactionId) => {
   }
 };
 
-// -------------------------
-// Get all / Get by id / other utils (giữ nguyên)
-// -------------------------
 const getAllTransactions = async (userId, options = {}) => {
   try {
     const {

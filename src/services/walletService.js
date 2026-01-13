@@ -18,11 +18,28 @@ const createWallet = async (userId, walletData) => {
     }
 
     const count = await Wallet.countDocuments({ userId });
+    if (count == 0){
+      const wallet = await Wallet.create({
+        ...walletData,
+        userId,
+        is_default: true,
+      });
+
+      return {
+        status: true,
+        error: 0,
+        message: "Created successfully",
+        data: wallet.toObject(),
+      };
+    }
+
+    if (walletData.is_default == true){
+      await Wallet.updateMany({ userId }, { is_default: false });
+    }
 
     const wallet = await Wallet.create({
       ...walletData,
-      userId,               // luôn override
-      is_default: count === 0,
+      userId,
     });
 
     return {
@@ -85,11 +102,7 @@ const getWalletById = async (walletId, userId) => {
 
 const updateWallet = async (walletId, userId, data) => {
   try {
-    const wallet = await Wallet.findOneAndUpdate(
-      { _id: walletId, userId },
-      data,
-      { new: true }
-    );
+    const wallet = await Wallet.findOne({ _id: walletId, userId });
 
     if (!wallet){
       return {
@@ -100,11 +113,21 @@ const updateWallet = async (walletId, userId, data) => {
       };
     }
 
+    if (data.is_default == true){
+      await Wallet.updateMany({ userId }, { is_default: false });
+    }
+
+    const updateWallet = await Wallet.findOneAndUpdate(
+      { _id: walletId, userId },
+      data,
+      { new: true }
+    );
+
     return {
       status: true,
       error: 0,
       message: "Updated successfully",
-      data: wallet.toObject(),
+      data: updateWallet.toObject(),
     };
   } catch(error){
     return {
@@ -118,15 +141,7 @@ const updateWallet = async (walletId, userId, data) => {
 
 const setDefaultWallet = async (walletId, userId) => {
   try{
-    // Bỏ mặc định các ví khác
-    await Wallet.updateMany({ userId }, { is_default: false });
-
-    // Set ví này làm mặc định
-    const wallet = await Wallet.findOneAndUpdate(
-      { _id: walletId, userId },
-      { is_default: true },
-      { new: true }
-    );
+    const wallet = await Wallet.findOne({ _id: walletId, userId });
 
     if (!wallet){
       return {
@@ -137,11 +152,28 @@ const setDefaultWallet = async (walletId, userId) => {
       };
     }
 
+    if (wallet.is_archived == true){
+      return {
+        status: false,
+        error: 1,
+        message: "Can not set default for archive wallet",
+        data: null,
+      };
+    }
+
+    await Wallet.updateMany({ userId }, { is_default: false });
+
+    const updateWallet = await Wallet.findOneAndUpdate(
+      { _id: walletId, userId },
+      { is_default: true },
+      { new: true }
+    );
+
     return {
       status: true,
       error: 0,
       message: "Set successfully",
-      data: wallet.toObject(),
+      data: updateWallet.toObject(),
     };
   } catch(error){
     return {
@@ -166,7 +198,6 @@ const deleteWallet = async (walletId, userId) => {
       };
     }
 
-    // Không cho xoá nếu đang là ví mặc định
     if (wallet.is_default){
       return {
         status: false,
@@ -225,25 +256,36 @@ const restoreWallet = async (walletId, userId) => {
 
 const archiveWallet = async (walletId, userId) => {
   try{
-    const wallet = await Wallet.findOneAndUpdate(
-      { _id: walletId, userId },
-      { is_archived: true },
-      { new: true }
-    );
+    const wallet = await Wallet.findOne({ _id: walletId, userId });
 
     if (!wallet){
       return {
         status: false,
         error: 1,
-        message: "Wallet not found or not deleted",
+        message: "Wallet not found",
         data: null,
       };
     }
 
+    if (wallet.is_default == true){
+      return {
+        status: false,
+        error: 1,
+        message: "Can not archive default wallet",
+        data: null,
+      };
+    }
+
+    const updateWallet = await Wallet.findOneAndUpdate(
+      { _id: walletId, userId },
+      { is_archived: true },
+      { new: true }
+    );
+
     return {
       status: true,
       error: 0,
-      data: wallet.toObject(),
+      data: updateWallet.toObject(),
     };
   } catch(error){
     return {

@@ -26,10 +26,6 @@ const categorySchema = new mongoose.Schema(
     icon: {
       type: String,
       default: "default",
-    },
-    is_default: {
-      type: Boolean,
-      default: false
     }
   },
   { timestamps: true }
